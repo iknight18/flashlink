@@ -247,6 +247,8 @@ async function start(): Promise<void> {
     if (!window.isSecureContext) showError('The camera needs HTTPS. Open the https:// address Vite printed.');
     else if (err instanceof DOMException && err.name === 'NotAllowedError')
       showError('Camera permission was denied. Allow camera access for this site in your browser settings, then try again.');
+    else if (err instanceof DOMException && err.name === 'NotReadableError')
+      showError('The camera is busy. Another tab or app is using it, often an older FlashLink tab. Close it, then press Start again.');
     else showError(`Could not start the camera: ${(err as Error).message}`);
   } finally {
     startBtn.disabled = false;
@@ -271,3 +273,9 @@ function stop(): void {
 setState('IDLE');
 setStartButton(false);
 startBtn.addEventListener('click', () => (sensor ? stop() : void start()));
+
+// Browsers keep the camera open in background tabs; release it so another tab or app can use it.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && sensor) stop();
+});
+window.addEventListener('pagehide', () => sensor?.stop());
