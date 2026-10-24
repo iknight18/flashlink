@@ -3,3 +3,4 @@ dist/
 .expo/
 *.log
 .DS_Store
+receiver/logs/

@@ -1,0 +1,76 @@
+import type { ReceiverEvent } from '@flashlink/protocol';
+import type { Region } from './channels/types';
+
+const ENDPOINT = '/__flashlink/log';
+
+function post(entry: object): void {
+  if (!import.meta.env.DEV) return;
+  fetch(ENDPOINT, { method: 'POST', body: JSON.stringify(entry), keepalive: true }).catch(() => {});
+}
+
+const round = (v: number, digits = 3) => Number(v.toFixed(digits));
+
+/**
+ * Dev-only: sends a one-line summary per second plus every notable receiver event
+ * to the Vite server, which prints it and appends it to receiver/logs/.
+ */
+export class Diagnostics {
+  private frames = 0;
+  private min = Infinity;
+  private max = -Infinity;
+  private threshold: number | null = null;
+  private intervals: number[] = [];
+  private state = 'IDLE';
+  private region: Region | null = null;
+  private windowStart: number | null = null;
+
+  constructor() {
+    post({ kind: 'session', userAgent: navigator.userAgent });
+  }
+
+  sample(t: number, level: number, threshold: number | null): void {
+    this.windowStart ??= t;
+    this.frames++;
+    this.min = Math.min(this.min, level);
+    this.max = Math.max(this.max, level);
+    this.threshold = threshold;
+    if (t - this.windowStart >= 1000) this.flush(t);
+  }
+
+  event(e: ReceiverEvent): void {
+    if (e.type === 'interval') {
+      this.intervals.push(e.ms);
+      return;
+    }
+    if (e.type === 'state') this.state = e.state;
+    if (e.type === 'progress' && e.received !== 0) return; // header only
+    post({ kind: 'event', ...e });
+  }
+
+  setRegion(region: Region): void {
+    this.region = region;
+    post({ kind: 'region', ...Object.fromEntries(Object.entries(region).map(([k, v]) => [k, round(v)])) });
+  }
+
+  private flush(t: number): void {
+    const elapsed = t - this.windowStart!;
+    const sorted = [...this.intervals].sort((a, b) => a - b);
+    post({
+      kind: 'stats',
+      state: this.state,
+      fps: round((this.frames * 1000) / elapsed, 1),
+      level: [round(this.min), round(this.max)],
+      contrast: round(this.max - this.min),
+      threshold: this.threshold === null ? null : round(this.threshold),
+      edges: sorted.length
+        ? { n: sorted.length, min: Math.round(sorted[0]), median: Math.round(sorted[sorted.length >> 1]), max: Math.round(sorted[sorted.length - 1]) }
+        : { n: 0 },
+      region: this.region && [round(this.region.x + this.region.w / 2, 2), round(this.region.y + this.region.h / 2, 2)],
+    });
+    this.windowStart = t;
+    this.frames = 0;
+    this.min = Infinity;
+    this.max = -Infinity;
+    this.intervals = [];
+  }
+}

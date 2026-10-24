@@ -1,4 +1,5 @@
-import type { Sensor } from '../types';
+import type { Region, Sensor } from '../types';
+import { BlinkTracker } from './blinkTracker';
 
 type FrameMeta = { captureTime?: number; expectedDisplayTime: number };
 type VideoWithRvfc = HTMLVideoElement & {
@@ -6,22 +7,26 @@ type VideoWithRvfc = HTMLVideoElement & {
   cancelVideoFrameCallback(handle: number): void;
 };
 
-/** Average luminance of a centred square region of the camera image. */
+/** Grid width the frame is downscaled to before tracking; height follows the aspect ratio. */
+const GRID_WIDTH = 48;
+
+/** Level of the blinking light, found anywhere in the frame by BlinkTracker. */
 export class CameraLightSensor implements Sensor {
   readonly id = 'light';
   readonly label = 'Light (camera)';
   private stream: MediaStream | null = null;
   private handle = 0;
   private stopped = false;
+  private tracker: BlinkTracker | null = null;
   private readonly canvas = document.createElement('canvas');
 
   constructor(
     private readonly video: HTMLVideoElement,
-    /** ROI side as a fraction of the shorter video dimension. Keep in sync with the aim box. */
-    readonly roiFraction = 0.2,
-  ) {
-    this.canvas.width = 32;
-    this.canvas.height = 32;
+    private readonly onRegion?: (region: Region) => void,
+  ) {}
+
+  hold(held: boolean): void {
+    this.tracker?.hold(held);
   }
 
   async start(onSample: (t: number, level: number) => void): Promise<void> {
@@ -37,16 +42,33 @@ export class CameraLightSensor implements Sensor {
     await video.play();
 
     const ctx = this.canvas.getContext('2d', { willReadFrequently: true })!;
+    let luma = new Float32Array(0);
+    let lastRegion = '';
     const onFrame = (now: number, meta: FrameMeta) => {
       if (this.stopped) return;
-      const side = Math.min(video.videoWidth, video.videoHeight) * this.roiFraction;
-      const sx = (video.videoWidth - side) / 2;
-      const sy = (video.videoHeight - side) / 2;
-      ctx.drawImage(video, sx, sy, side, side, 0, 0, 32, 32);
-      const px = ctx.getImageData(0, 0, 32, 32).data;
-      let sum = 0;
-      for (let i = 0; i < px.length; i += 4) sum += 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
-      onSample(meta.captureTime ?? meta.expectedDisplayTime ?? now, sum / (px.length / 4) / 255);
+      const gw = GRID_WIDTH;
+      const gh = Math.max(1, Math.round((GRID_WIDTH * video.videoHeight) / video.videoWidth));
+      if (!this.tracker || this.tracker.height !== gh) {
+        // First frame, or the camera rotated: start tracking afresh at the new aspect ratio.
+        this.tracker = new BlinkTracker(gw, gh);
+        this.canvas.width = gw;
+        this.canvas.height = gh;
+        luma = new Float32Array(gw * gh);
+      }
+      ctx.drawImage(video, 0, 0, gw, gh);
+      const px = ctx.getImageData(0, 0, gw, gh).data;
+      for (let i = 0; i < luma.length; i++) {
+        luma[i] = (0.299 * px[i * 4] + 0.587 * px[i * 4 + 1] + 0.114 * px[i * 4 + 2]) / 255;
+      }
+      const t = meta.captureTime ?? meta.expectedDisplayTime ?? now;
+      const level = this.tracker.push(t, luma);
+      const region = this.tracker.region;
+      const key = `${region.x},${region.y},${region.w},${region.h}`;
+      if (key !== lastRegion) {
+        lastRegion = key;
+        this.onRegion?.(region);
+      }
+      onSample(t, level);
       this.handle = video.requestVideoFrameCallback(onFrame);
     };
     this.handle = video.requestVideoFrameCallback(onFrame);
@@ -57,6 +79,7 @@ export class CameraLightSensor implements Sensor {
     (this.video as VideoWithRvfc).cancelVideoFrameCallback?.(this.handle);
     this.stream?.getTracks().forEach((t) => t.stop());
     this.stream = null;
+    this.tracker = null;
     this.video.srcObject = null;
   }
 }

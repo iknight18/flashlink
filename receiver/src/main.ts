@@ -1,6 +1,7 @@
 import { Receiver, type ReceiverEvent } from '@flashlink/protocol';
 import { channels } from './channels/registry';
-import type { Sensor } from './channels/types';
+import type { Region, Sensor } from './channels/types';
+import { Diagnostics } from './diagnostics';
 import { Graph } from './ui/graph';
 import { Histogram } from './ui/histogram';
 
@@ -31,18 +32,20 @@ function showError(text: string | null): void {
   errorEl.textContent = text ?? '';
 }
 
-function positionAim(): void {
-  const side = 0.2 * Math.min(video.clientWidth, video.clientHeight);
-  aim.style.width = aim.style.height = `${side}px`;
+/** The aim box shows where the sensor is reading from; it follows the tracked light. */
+function showRegion(r: Region): void {
+  aim.style.left = `${r.x * 100}%`;
+  aim.style.top = `${r.y * 100}%`;
+  aim.style.width = `${r.w * 100}%`;
+  aim.style.height = `${r.h * 100}%`;
 }
-video.addEventListener('loadedmetadata', positionAim);
-video.addEventListener('resize', positionAim);
-window.addEventListener('resize', positionAim);
 
 function handle(e: ReceiverEvent): void {
   switch (e.type) {
     case 'state':
       setState(e.state);
+      // Don't let the tracker move the region in the middle of a frame.
+      sensor?.hold?.(e.state === 'LOCKED' || e.state === 'READING');
       if (e.state === 'LOCKED') progressEl.textContent = '';
       break;
     case 'interval':
@@ -58,7 +61,7 @@ function handle(e: ReceiverEvent): void {
     case 'error':
       progressEl.textContent = '';
       if (e.reason === 'crc') messageEl.textContent = `${e.bestGuess}\n(corrupted, ask the sender to resend)`;
-      else messageEl.textContent = '(signal lost, keep the light inside the red box)';
+      else messageEl.textContent = '(signal lost, keep the light in view and steady)';
       break;
   }
 }
@@ -67,12 +70,23 @@ async function start(): Promise<void> {
   showError(null);
   const def = channels.find((c) => c.id === select.value)!;
   const rx = new Receiver();
-  sensor = def.create({ video });
+  const diag = new Diagnostics();
+  sensor = def.create({
+    video,
+    onRegion: (r) => {
+      showRegion(r);
+      diag.setRegion(r);
+    },
+  });
   startBtn.disabled = true;
   try {
     await sensor.start((t, level) => {
       graph.push(t, level, rx.threshold);
-      rx.push(t, level).forEach(handle);
+      diag.sample(t, level, rx.threshold);
+      for (const e of rx.push(t, level)) {
+        handle(e);
+        diag.event(e);
+      }
     });
     setState('HUNTING');
     startBtn.textContent = 'Stop';
