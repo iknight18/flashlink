@@ -1,5 +1,6 @@
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { defineConfig, type Plugin } from 'vite';
 import basicSsl from '@vitejs/plugin-basic-ssl';
 
@@ -34,4 +35,13 @@ function diagnosticsLog(): Plugin {
 export default defineConfig({
   plugins: [basicSsl(), diagnosticsLog()],
   server: { host: true },
+  // Two pages: the camera receiver (index.html) and the screen-bulb emitter (emitter.html).
+  build: {
+    rolldownOptions: {
+      input: {
+        main: fileURLToPath(new URL('./index.html', import.meta.url)),
+        emitter: fileURLToPath(new URL('./emitter.html', import.meta.url)),
+      },
+    },
+  },
 });

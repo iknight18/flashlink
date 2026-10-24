@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0e0e10" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f6f6f7" media="(prefers-color-scheme: light)" />
+    <title>FlashLink Emitter</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/src/style.css" />
+    <link rel="stylesheet" href="/src/emitter/emitter.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark" id="brand-mark"></span>
+          <span class="brand-name">FlashLink</span>
+          <span class="brand-role">Emitter</span>
+        </div>
+        <nav class="em-nav">
+          <a class="em-nav-link" href="/" id="to-receiver">Receiver</a>
+        </nav>
+      </header>
+
+      <main class="layout">
+        <section class="em-composer" aria-label="Message">
+          <div class="field em-message">
+            <label class="em-label" for="message">Message</label>
+            <textarea id="message" class="em-textarea" rows="4" spellcheck="false" placeholder="Type what the bulbs should say"></textarea>
+            <div class="em-meta">
+              <span id="counter">0 chars</span>
+              <span id="eta"></span>
+            </div>
+            <p class="em-error" id="message-error" role="alert" hidden></p>
+          </div>
+
+          <div class="em-settings">
+            <div class="em-setting">
+              <span class="em-label" id="bulbs-label">Bulbs</span>
+              <div class="stepper" id="bulbs" role="group" aria-labelledby="bulbs-label">
+                <button class="stepper-btn" type="button" data-dir="-1" aria-label="Fewer bulbs"></button>
+                <output class="stepper-value" aria-live="polite"><span data-value></span><small>bulbs</small></output>
+                <button class="stepper-btn" type="button" data-dir="1" aria-label="More bulbs"></button>
+              </div>
+            </div>
+
+            <div class="em-setting">
+              <span class="em-label" id="coding-label">Coding</span>
+              <div class="segmented" id="coding" role="radiogroup" aria-labelledby="coding-label">
+                <button type="button" role="radio" data-value="pulse">Pulse-length</button>
+                <button type="button" role="radio" data-value="manchester">Manchester</button>
+              </div>
+            </div>
+
+            <div class="em-setting">
+              <span class="em-label" id="slot-label">Slot length</span>
+              <div class="stepper" id="slot" role="group" aria-labelledby="slot-label">
+                <button class="stepper-btn" type="button" data-dir="-1" aria-label="Shorter slot"></button>
+                <output class="stepper-value" aria-live="polite"><span data-value></span><small>ms</small></output>
+                <button class="stepper-btn" type="button" data-dir="1" aria-label="Longer slot"></button>
+              </div>
+              <span class="em-hint" id="slot-hint"></span>
+            </div>
+
+            <div class="em-setting">
+              <span class="em-label" id="repeat-label">Repeat until stopped</span>
+              <button class="switch" id="repeat" type="button" role="switch" aria-checked="true" aria-labelledby="repeat-label"><span class="switch-knob"></span></button>
+              <span class="em-hint">Loops the message with a short dark gap.</span>
+            </div>
+          </div>
+
+          <div class="em-actions">
+            <button id="send" class="btn btn-primary" type="button"></button>
+            <button id="calibrate" class="btn btn-secondary" type="button"></button>
+          </div>
+        </section>
+
+        <aside class="panel">
+          <section class="status" aria-live="polite">
+            <p class="status-title" id="status-title">Ready</p>
+            <p class="status-text" id="status-text">Calibrate once, then send your message.</p>
+          </section>
+
+          <figure class="em-preview-wrap">
+            <figcaption class="meter-head">
+              <span class="section-label">Screen layout</span>
+              <span class="em-preview-caption" id="preview-caption"></span>
+            </figcaption>
+            <div class="em-preview" id="preview"></div>
+          </figure>
+
+          <p class="hint">Send turns this screen into a black stage with one white tile per bulb. Press Esc or Stop to end. Keep the receiver's camera on the whole screen.</p>
+        </aside>
+      </main>
+    </div>
+
+    <div class="send-stage" id="stage" hidden>
+      <div class="send-tiles" id="stage-tiles"></div>
+      <div class="send-hud">
+        <span class="send-progress" id="stage-progress"></span>
+        <button class="send-stop" id="stage-stop" type="button">Stop</button>
+      </div>
+    </div>
+    <script type="module" src="/src/emitter/main.ts"></script>
+  </body>
+</html>
