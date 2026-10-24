@@ -7,12 +7,16 @@ import type { ChannelProps } from '../types';
 export function LightChannel({ onReady }: ChannelProps) {
   const [permission, requestPermission] = useCameraPermissions();
   const [torch, setTorch] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
   const granted = permission?.granted ?? false;
 
   useEffect(() => {
-    onReady(granted ? { id: 'light', label: 'Light (torch)', setLevel: (l) => setTorch(l === 1) } : null);
+    onReady(granted && cameraReady ? { id: 'light', label: 'Light (torch)', setLevel: (l) => setTorch(l === 1) } : null);
     return () => onReady(null);
-  }, [granted, onReady]);
+  }, [granted, cameraReady, onReady]);
+
+  // The CameraView unmounts when permission is lost; a remount must wait for a fresh onCameraReady.
+  useEffect(() => { if (!granted) setCameraReady(false); }, [granted]);
 
   if (!permission) return null;
   if (!granted) {
@@ -25,7 +29,8 @@ export function LightChannel({ onReady }: ChannelProps) {
   }
   return (
     <View style={styles.box}>
-      <CameraView style={styles.preview} facing="back" enableTorch={torch} />
+      <CameraView style={styles.preview} facing="back" enableTorch={torch}
+        onCameraReady={() => setCameraReady(true)} />
       <Text>Torch: {torch ? 'ON' : 'off'}</Text>
     </View>
   );

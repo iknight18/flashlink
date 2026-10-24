@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
-import { Pressable, SafeAreaView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import {
   calibrationSignal, encodeFrame, manchesterEncode, MAX_PAYLOAD, PREAMBLE_BITS,
   runSchedule, utf8Length, type TimedLevels,
@@ -34,75 +35,82 @@ export default function App() {
   const busy = progress !== null;
 
   async function play(signal: TimedLevels) {
+    if (abort.current) return;
     if (!tx.current) { setError('Channel not ready; grant permission first.'); return; }
     setError(null);
     const ctrl = new AbortController();
     abort.current = ctrl;
     setProgress(0);
     try {
+      await activateKeepAwakeAsync('flashlink-tx');
       await runSchedule(signal, (l) => tx.current?.setLevel(l), {
         abort: ctrl.signal,
         onProgress: (done, total) => setProgress(done / total),
       });
     } finally {
+      deactivateKeepAwake('flashlink-tx').catch(() => {});
       abort.current = null;
       setProgress(null);
     }
   }
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <Text style={styles.title}>FlashLink Emitter</Text>
+    <SafeAreaView style={styles.safe}>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.screen}>
+        <Text style={styles.title}>FlashLink Emitter</Text>
 
-      <Text style={styles.label}>Channel</Text>
-      <View style={styles.row}>
-        {channels.map((c) => (
-          <Chip key={c.id} label={c.label} active={c.id === channelId} onPress={() => !busy && setChannelId(c.id)} />
-        ))}
-      </View>
-      <channel.Component onReady={onReady} />
-
-      <Text style={styles.label}>Message</Text>
-      <TextInput style={styles.input} value={text} onChangeText={setText} multiline editable={!busy} />
-      <Text style={tooLong ? styles.error : styles.hint}>
-        {bytes}/{MAX_PAYLOAD} bytes · ~{seconds.toFixed(0)} s at {bitMs} ms/bit
-      </Text>
-
-      <Text style={styles.label}>Speed (ms per bit)</Text>
-      <View style={styles.row}>
-        {SPEEDS.map((s) => (
-          <Chip key={s} label={`${s}`} active={s === bitMs} onPress={() => !busy && setBitMs(s)} />
-        ))}
-      </View>
-
-      {busy ? (
-        <>
-          <View style={styles.bar}><View style={[styles.fill, { width: `${(progress ?? 0) * 100}%` }]} /></View>
-          <Pressable style={styles.button} onPress={() => abort.current?.abort()}>
-            <Text style={styles.buttonText}>Stop</Text>
-          </Pressable>
-        </>
-      ) : (
+        <Text style={styles.label}>Channel</Text>
         <View style={styles.row}>
-          <Pressable
-            style={[styles.button, tooLong && styles.disabled]}
-            disabled={tooLong}
-            onPress={() => play(manchesterEncode(encodeFrame(text), bitMs))}
-          >
-            <Text style={styles.buttonText}>Send</Text>
-          </Pressable>
-          <Pressable style={[styles.button, styles.secondary]} onPress={() => play(calibrationSignal(bitMs, 10_000))}>
-            <Text style={styles.buttonText}>Calibrate (10 s)</Text>
-          </Pressable>
+          {channels.map((c) => (
+            <Chip key={c.id} label={c.label} active={c.id === channelId} onPress={() => !busy && setChannelId(c.id)} />
+          ))}
         </View>
-      )}
-      {error && <Text style={styles.error}>{error}</Text>}
+        <channel.Component onReady={onReady} />
+
+        <Text style={styles.label}>Message</Text>
+        <TextInput style={styles.input} value={text} onChangeText={setText} multiline editable={!busy}
+          returnKeyType="done" submitBehavior="blurAndSubmit" />
+        <Text style={tooLong ? styles.error : styles.hint}>
+          {bytes}/{MAX_PAYLOAD} bytes · ~{seconds.toFixed(0)} s at {bitMs} ms/bit
+        </Text>
+
+        <Text style={styles.label}>Speed (ms per bit)</Text>
+        <View style={styles.row}>
+          {SPEEDS.map((s) => (
+            <Chip key={s} label={`${s}`} active={s === bitMs} onPress={() => !busy && setBitMs(s)} />
+          ))}
+        </View>
+
+        {busy ? (
+          <>
+            <View style={styles.bar}><View style={[styles.fill, { width: `${(progress ?? 0) * 100}%` }]} /></View>
+            <Pressable style={styles.button} onPress={() => abort.current?.abort()}>
+              <Text style={styles.buttonText}>Stop</Text>
+            </Pressable>
+          </>
+        ) : (
+          <View style={styles.row}>
+            <Pressable
+              style={[styles.button, tooLong && styles.disabled]}
+              disabled={tooLong}
+              onPress={() => play(manchesterEncode(encodeFrame(text), bitMs)).catch((e) => setError(String(e)))}
+            >
+              <Text style={styles.buttonText}>Send</Text>
+            </Pressable>
+            <Pressable style={[styles.button, styles.secondary]} onPress={() => play(calibrationSignal(bitMs, 10_000)).catch((e) => setError(String(e)))}>
+              <Text style={styles.buttonText}>Calibrate (10 s)</Text>
+            </Pressable>
+          </View>
+        )}
+        {error && <Text style={styles.error}>{error}</Text>}
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, padding: 20, gap: 8 },
+  safe: { flex: 1 },
+  screen: { padding: 20, gap: 8 },
   title: { fontSize: 24, fontWeight: '700', marginVertical: 12 },
   label: { fontWeight: '600', marginTop: 12 },
   row: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
