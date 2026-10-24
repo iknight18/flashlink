@@ -276,18 +276,26 @@ video { display: block; width: 100%; height: auto; }
 }
 .alert .icon { flex: none; margin-top: 2px; }
 
-.output { display: grid; gap: 8px; }
-.message {
-  margin: 0;
-  font: 500 22px/1.35 var(--font);
-  letter-spacing: -0.02em;
-  white-space: pre-wrap;
-  word-break: break-word;
+.feed { display: grid; gap: 10px; }
+.feed-head { display: flex; justify-content: space-between; align-items: baseline; }
+.feed-count { font: 500 12px var(--mono); color: var(--muted); }
+.feed-empty { margin: 0; color: var(--muted); }
+.feed-list { list-style: none; margin: 0; padding: 0; max-height: 46vh; overflow-y: auto; }
+.feed-list li {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: baseline;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+  animation: rise 0.45s var(--ease) both;
+  transition: opacity 0.6s var(--ease);
 }
-.message:empty { display: none; }
-.message[data-corrupted] { color: var(--danger); }
-.message[data-streaming] { color: var(--muted); }
-.message[data-streaming]::after {
+.feed-list time { font: 400 12px var(--mono); color: var(--muted); }
+.feed-list .text { font-size: 17px; font-weight: 500; letter-spacing: -0.01em; word-break: break-word; white-space: pre-wrap; }
+.feed-list .count { font: 500 12px var(--mono); color: var(--accent); }
+.feed-list li[data-live] .text { color: var(--muted); }
+.feed-list li[data-live] .text::after {
   content: '';
   display: inline-block;
   width: 2px;
@@ -297,8 +305,11 @@ video { display: block; width: 100%; height: auto; }
   background: var(--accent);
   animation: caret 1s steps(1) infinite;
 }
-.message:not(:empty) + .message-empty { display: none; }
-.message-empty { margin: 0; color: var(--muted); }
+.feed-list li[data-repeating] .count::before { content: 'receiving again  '; color: var(--muted); font-weight: 400; }
+.feed-list li[data-repeating] { animation: glow 1.2s ease-in-out infinite; }
+.feed-list li[data-failed] { opacity: 0.55; }
+.feed-list li[data-failed] .text { color: var(--danger); text-decoration: line-through; text-decoration-thickness: 1px; }
+.feed-list li[data-failed] .count { color: var(--danger); }
 
 .stats {
   display: grid;
@@ -336,29 +347,13 @@ video { display: block; width: 100%; height: auto; }
 .hint { margin: 8px 0 10px; color: var(--muted); font-size: 13px; }
 .histogram { display: block; width: 100%; height: 120px; }
 
-.history { display: grid; gap: 8px; }
-.history-list { list-style: none; margin: 0; padding: 0; }
-.history-list:empty::after { content: 'Received messages will be listed here.'; color: var(--faint); font-size: 13px; }
-.history-list li {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 12px;
-  padding: 10px 0;
-  border-top: 1px solid var(--line);
-  animation: rise 0.5s var(--ease) both;
-  animation-delay: calc(var(--i, 0) * 60ms);
-}
-.history-list time { font: 400 12px/1.9 var(--mono); color: var(--muted); }
-.history-list span { word-break: break-word; }
-.history-list .count { font: 500 12px/1.9 var(--mono); color: var(--accent); }
-.history-list li[data-count='1'] .count { visibility: hidden; }
-
 /* ---------- Motion ---------- */
 
 @keyframes breathe { 50% { transform: scale(0.6); opacity: 0.45; } }
 @keyframes ping { 0% { transform: scale(0.9); opacity: 0.7; } 100% { transform: scale(1.35); opacity: 0; } }
 @keyframes shimmer { to { background-position: -200% 0; } }
 @keyframes caret { 50% { opacity: 0; } }
+@keyframes glow { 50% { background: var(--accent-soft); } }
 @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
 
 @media (prefers-reduced-motion: reduce) {

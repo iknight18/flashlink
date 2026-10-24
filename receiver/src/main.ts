@@ -18,9 +18,10 @@ const statusTitle = $<HTMLParagraphElement>('status-title');
 const statusText = $<HTMLParagraphElement>('status-text');
 const progress = $<HTMLDivElement>('progress');
 const progressFill = $<HTMLSpanElement>('progress-fill');
-const messageEl = $<HTMLPreElement>('message');
 const errorEl = $<HTMLParagraphElement>('error');
-const historyEl = $<HTMLOListElement>('history');
+const feedEl = $<HTMLOListElement>('feed');
+const feedEmpty = $<HTMLParagraphElement>('feed-empty');
+const feedCount = $<HTMLSpanElement>('feed-count');
 const fpsHint = $<HTMLParagraphElement>('fps-hint');
 
 $('brand-mark').innerHTML = icon('flashlight', 18);
@@ -37,15 +38,18 @@ const COPY: Record<UiState, { pill: string; title: string; text: string }> = {
   IDLE: { pill: 'Idle', title: 'Ready when you are', text: 'Press Start to open the camera.' },
   HUNTING: { pill: 'Searching', title: 'Looking for the light', text: 'Point the camera at the sender. Calibrate on the emitter helps it lock on.' },
   LOCKED: { pill: 'Locked', title: 'Locked on', text: 'Timing found. Waiting for the start of a message.' },
-  READING: { pill: 'Receiving', title: 'Receiving', text: 'Hold steady until the message completes.' },
-  DONE: { pill: 'Received', title: 'Message received', text: 'Checksum passed. Ready for the next one.' },
-  ERROR: { pill: 'Lost', title: 'Signal lost', text: 'Ask the sender to resend and keep both phones steady.' },
+  READING: { pill: 'Receiving', title: 'Receiving', text: 'The message streams into the list below.' },
+  DONE: { pill: 'Received', title: 'Message received', text: 'Listening for the next one.' },
 };
+
+/** How long a lost or garbled attempt stays visible before it fades out. */
+const NOTICE_MS = 4000;
 
 let sensor: Sensor | null = null;
 let region: Region | null = null;
-/** Last text that passed its checksum; a later failed repeat must not replace it. */
-let verified: string | null = null;
+/** The row streaming the message currently arriving, if any. */
+let live: HTMLLIElement | null = null;
+let notice = 0;
 
 function setStartButton(running: boolean): void {
   startBtn.innerHTML = running ? `${icon('stop', 16)}Stop` : `${icon('play', 16)}Start`;
@@ -54,6 +58,7 @@ function setStartButton(running: boolean): void {
 
 function setState(state: UiState): void {
   const copy = COPY[state];
+  clearTimeout(notice);
   pill.dataset.state = state;
   pillText.textContent = copy.pill;
   statusTitle.textContent = copy.title;
@@ -93,44 +98,98 @@ function showStats(s: SignalStats): void {
   $('stat-spread').textContent = s.edges.n > 1 ? `${s.edges.max! - s.edges.min!} ms` : '–';
 }
 
-function addHistory(text: string): void {
-  // A looping emitter sends the same message over and over: count repeats on one row.
-  const first = historyEl.firstElementChild as HTMLLIElement | null;
-  if (first?.dataset.text === text) {
-    const count = Number(first.dataset.count) + 1;
-    first.dataset.count = String(count);
-    first.querySelector('time')!.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    first.querySelector('.count')!.textContent = `×${count}`;
-    return;
-  }
+const clock = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+function makeRow(text: string): HTMLLIElement {
   const li = document.createElement('li');
-  li.dataset.text = text;
-  li.dataset.count = '1';
   const time = document.createElement('time');
-  const now = new Date();
-  time.dateTime = now.toISOString();
-  time.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  time.textContent = clock();
   const span = document.createElement('span');
+  span.className = 'text';
   span.textContent = text;
   const count = document.createElement('b');
   count.className = 'count';
   li.append(time, span, count);
-  historyEl.prepend(li);
-  while (historyEl.children.length > 20) historyEl.lastElementChild!.remove();
+  return li;
 }
 
-function showMessage(text: string, kind: 'streaming' | 'verified' | 'corrupted'): void {
-  messageEl.textContent = text;
-  messageEl.toggleAttribute('data-streaming', kind === 'streaming');
-  messageEl.toggleAttribute('data-corrupted', kind === 'corrupted');
+function updateFeedMeta(): void {
+  const n = feedEl.querySelectorAll('li[data-verified]').length;
+  feedEmpty.hidden = feedEl.children.length > 0;
+  feedCount.textContent = n ? String(n) : '';
+}
+
+/** Last verified row, which a looping emitter keeps repeating. */
+const lastVerified = () => [...feedEl.querySelectorAll<HTMLLIElement>('li[data-verified]')].at(-1) ?? null;
+
+function streamText(text: string): void {
+  const last = lastVerified();
+  // A repeat of the last message only pulses its row; a new message streams into a live row.
+  if (!live && last && last.dataset.text!.startsWith(text)) {
+    last.toggleAttribute('data-repeating', true);
+    return;
+  }
+  last?.removeAttribute('data-repeating');
+  if (!live) {
+    live = makeRow('');
+    live.dataset.live = '';
+    feedEl.append(live);
+    updateFeedMeta();
+  }
+  live.querySelector('.text')!.textContent = text;
+  live.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
+function addMessage(text: string): void {
+  const last = lastVerified();
+  last?.removeAttribute('data-repeating');
+  if (!live && last?.dataset.text === text) {
+    const count = Number(last.dataset.count) + 1;
+    last.dataset.count = String(count);
+    last.querySelector('time')!.textContent = clock();
+    last.querySelector('.count')!.textContent = `×${count}`;
+    return;
+  }
+  const row = live ?? makeRow(text);
+  live = null;
+  row.removeAttribute('data-live');
+  row.dataset.verified = '';
+  row.dataset.text = text;
+  row.dataset.count = '1';
+  row.querySelector('.text')!.textContent = text;
+  if (!row.isConnected) feedEl.append(row);
+  while (feedEl.children.length > 50) feedEl.firstElementChild!.remove();
+  updateFeedMeta();
+}
+
+/** Marks the live attempt as failed, lets it fade out, and says the receiver keeps searching. */
+function failAttempt(reason: string, bestGuess?: string): void {
+  lastVerified()?.removeAttribute('data-repeating');
+  if (live) {
+    const row = live;
+    live = null;
+    row.removeAttribute('data-live');
+    row.dataset.failed = '';
+    if (bestGuess !== undefined) row.querySelector('.text')!.textContent = bestGuess;
+    row.querySelector('.count')!.textContent = reason;
+    setTimeout(() => {
+      row.remove();
+      updateFeedMeta();
+    }, NOTICE_MS);
+  }
+  statusTitle.textContent = 'Signal lost, searching again';
+  statusText.textContent = 'If the sender is repeating, the next pass will come through.';
+  clearTimeout(notice);
+  notice = window.setTimeout(() => {
+    statusTitle.textContent = COPY.HUNTING.title;
+    statusText.textContent = COPY.HUNTING.text;
+  }, NOTICE_MS);
 }
 
 function handle(e: ReceiverEvent): void {
   switch (e.type) {
     case 'state':
       setState(e.state);
-      // Don't let the tracker move the region in the middle of a frame.
-      sensor?.hold?.(e.state === 'LOCKED' || e.state === 'READING');
       break;
     case 'interval':
       histogram.push(e.ms);
@@ -138,25 +197,14 @@ function handle(e: ReceiverEvent): void {
     case 'progress':
       statusText.textContent = `${e.received} of ${e.length} bytes`;
       progressFill.style.transform = `scaleX(${e.length ? e.received / e.length : 1})`;
-      // A repeat of the verified message stays put; a different message streams in.
-      if (verified === null || !verified.startsWith(e.text)) showMessage(e.text, 'streaming');
+      streamText(e.text);
       break;
     case 'message':
-      verified = e.text;
-      showMessage(e.text, 'verified');
-      addHistory(e.text);
+      addMessage(e.text);
       break;
     case 'error':
-      if (verified !== null) {
-        // Keep the verified copy; the emitter is likely looping and will send it again.
-        showMessage(verified, 'verified');
-        statusText.textContent = 'A repeat was garbled. The message shown was verified earlier.';
-      } else if (e.reason === 'crc') {
-        showMessage(e.bestGuess, 'corrupted');
-        statusText.textContent = 'Checksum failed, so this is a best guess. If the sender is repeating, the next pass will fix it.';
-      } else {
-        messageEl.removeAttribute('data-streaming');
-      }
+      if (e.reason === 'crc') failAttempt('garbled', e.bestGuess);
+      else failAttempt('lost');
       break;
   }
 }
@@ -210,7 +258,9 @@ function stop(): void {
   sensor?.stop();
   sensor = null;
   region = null;
-  verified = null;
+  live?.remove();
+  live = null;
+  updateFeedMeta();
   aim.hidden = true;
   viewport.dataset.camera = 'off';
   graph.clear();

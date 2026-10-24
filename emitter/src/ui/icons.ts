@@ -5,6 +5,8 @@ import type { Icon } from 'phosphor-react-native';
 /* eslint-disable @typescript-eslint/no-require-imports */
 export const CameraIcon: Icon = require('phosphor-react-native/src/icons/Camera').CameraIcon;
 export const CrosshairIcon: Icon = require('phosphor-react-native/src/icons/Crosshair').CrosshairIcon;
+export const MinusIcon: Icon = require('phosphor-react-native/src/icons/Minus').MinusIcon;
+export const PlusIcon: Icon = require('phosphor-react-native/src/icons/Plus').PlusIcon;
 export const FlashlightIcon: Icon = require('phosphor-react-native/src/icons/Flashlight').FlashlightIcon;
 export const PaperPlaneTiltIcon: Icon = require('phosphor-react-native/src/icons/PaperPlaneTilt').PaperPlaneTiltIcon;
 export const StopIcon: Icon = require('phosphor-react-native/src/icons/Stop').StopIcon;

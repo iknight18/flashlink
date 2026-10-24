@@ -3,7 +3,8 @@ import { ManchesterDecoder, type ManchesterDecoderOptions } from './modulation/m
 import { DutyCorrector, type DutyCorrectorOptions } from './signal/dutyCorrector';
 import { EdgeDetector, type EdgeDetectorOptions } from './signal/edgeDetector';
 
-export type ReceiverState = 'HUNTING' | 'LOCKED' | 'READING' | 'DONE' | 'ERROR';
+/** There is no stopped state: after a message or an error the receiver goes back to hunting. */
+export type ReceiverState = 'HUNTING' | 'LOCKED' | 'READING' | 'DONE';
 
 export type ReceiverEvent =
   | { type: 'state'; state: ReceiverState }
@@ -78,7 +79,7 @@ export class Receiver {
         break;
       } else {
         events.push({ type: 'error', reason: 'crc', bestGuess: ev.bestGuess });
-        this.finish('ERROR', events);
+        this.finish('HUNTING', events);
         break;
       }
     }
@@ -91,7 +92,7 @@ export class Receiver {
     this.lastEdgeT = null;
     if (wasReading) {
       events.push({ type: 'error', reason: 'lost' });
-      this.setState('ERROR', events);
+      this.setState('HUNTING', events);
     } else if (this.state === 'LOCKED') {
       this.setState('HUNTING', events);
     }

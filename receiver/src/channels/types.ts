@@ -12,8 +12,6 @@ export interface Sensor {
   /** Starts the hardware and reports one normalized level (0–1) per reading. */
   start(onSample: (timestampMs: number, level: number) => void): Promise<void>;
   stop(): void;
-  /** Optional: freeze any adaptation (e.g. light tracking) while a frame is being read. */
-  hold?(held: boolean): void;
   /** Optional: hardware details for diagnostics, available after start(). */
   describe?(): Record<string, unknown>;
 }

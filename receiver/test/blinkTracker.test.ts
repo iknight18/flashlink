@@ -24,79 +24,69 @@ function frame(t: number, lights: Light[], background = 0.1): Float32Array {
   return f;
 }
 
-function run(tracker: BlinkTracker, lights: Light[], fromMs: number, toMs: number): number[] {
+function run(tracker: BlinkTracker, lights: (t: number) => Light[], fromMs: number, toMs: number): number[] {
   const levels: number[] = [];
-  for (let t = fromMs; t < toMs; t += FRAME) levels.push(tracker.push(t, frame(t, lights)));
+  for (let t = fromMs; t < toMs; t += FRAME) levels.push(tracker.push(t, frame(t, lights(t))));
   return levels;
 }
 
+const swing = (levels: number[]) => Math.max(...levels) - Math.min(...levels);
+
 function contains(r: Region, x: number, y: number): boolean {
-  return x / W >= r.x && x / W < r.x + r.w && y / H >= r.y && y / H < r.y + r.h;
+  const cx = (x + 0.5) / W;
+  const cy = (y + 0.5) / H;
+  return cx >= r.x && cx <= r.x + r.w && cy >= r.y && cy <= r.y + r.h;
 }
 
 describe('BlinkTracker', () => {
-  it('starts on the centre of the frame', () => {
-    const tracker = new BlinkTracker(W, H);
-    expect(contains(tracker.region, W >> 1, H >> 1)).toBe(true);
+  it('starts with the whole frame as its region', () => {
+    expect(new BlinkTracker(W, H).region).toEqual({ x: 0, y: 0, w: 1, h: 1 });
   });
 
-  it('finds the blinking light, not the brighter steady lamp', () => {
+  it('locates the blinking light, not the brighter steady lamp', () => {
     const tracker = new BlinkTracker(W, H);
-    run(tracker, [steady(5, 5, 1.0), blinking(40, 30)], 0, 2000);
+    run(tracker, () => [steady(5, 5, 1.0), blinking(40, 30)], 0, 2000);
     expect(contains(tracker.region, 40, 30)).toBe(true);
+    expect(contains(tracker.region, 5, 5)).toBe(false);
   });
 
-  it('reports a single-pixel light with nearly full contrast', () => {
+  it('reads a single-pixel light anywhere in the frame with nearly full contrast', () => {
     const tracker = new BlinkTracker(W, H);
-    const levels = run(tracker, [blinking(10, 20)], 0, 3000).slice(-30);
-    // A plain 5×5 average would swing only 0.5 / 25 = 0.02.
-    expect(Math.max(...levels) - Math.min(...levels)).toBeGreaterThan(0.4);
+    const levels = run(tracker, () => [steady(5, 5, 1.0), blinking(10, 20)], 0, 3000).slice(-30);
+    // A plain average of the whole frame would swing only 0.5 / 1728.
+    expect(swing(levels)).toBeGreaterThan(0.4);
   });
 
-  it('keeps its position while held, even if a stronger light starts blinking', () => {
+  it('keeps the contrast while the light drifts across the frame', () => {
     const tracker = new BlinkTracker(W, H);
-    run(tracker, [blinking(10, 10)], 0, 2000);
-    tracker.hold(true);
-    run(tracker, [blinking(10, 10, 200, 0.1, 0.3), blinking(40, 30, 200, 0.0, 1.0)], 2000, 4000);
-    expect(contains(tracker.region, 10, 10)).toBe(true);
-    tracker.hold(false);
-    run(tracker, [blinking(10, 10, 200, 0.1, 0.3), blinking(40, 30, 200, 0.0, 1.0)], 4000, 5000);
-    expect(contains(tracker.region, 40, 30)).toBe(true);
-  });
-
-  it('follows a light that drifts while held, keeping its contrast', () => {
-    const tracker = new BlinkTracker(W, H);
-    run(tracker, [blinking(10, 18)], 0, 2000);
-    tracker.hold(true);
-    // The sender's hand drifts: the light moves one cell every 150 ms, 12 cells in total.
-    const levels: number[] = [];
-    for (let t = 2000; t < 2000 + 12 * 150; t += FRAME) {
-      const x = 10 + Math.floor((t - 2000) / 150);
-      levels.push(tracker.push(t, frame(t, [blinking(x, 18)])));
+    // The sender's hand drifts one cell every 150 ms, 20 cells in all.
+    const xAt = (t: number) => 10 + Math.min(20, Math.floor(t / 150));
+    const levels = run(tracker, (t) => [blinking(xAt(t), 18)], 0, 3000);
+    for (let start = 30; start + 15 <= levels.length; start += 15) {
+      expect(swing(levels.slice(start, start + 15))).toBeGreaterThan(0.3);
     }
-    expect(contains(tracker.region, 21, 18)).toBe(true);
-    const tail = levels.slice(-15);
-    expect(Math.max(...tail) - Math.min(...tail)).toBeGreaterThan(0.3);
+    expect(contains(tracker.region, xAt(3000 - FRAME), 18)).toBe(true);
   });
 
-  it('does not jump to a distant light while held', () => {
+  it('picks the light up again within half a second after it jumps across the frame', () => {
     const tracker = new BlinkTracker(W, H);
-    run(tracker, [blinking(10, 10)], 0, 2000);
-    tracker.hold(true);
-    run(tracker, [blinking(10, 10), blinking(40, 30, 200, 0.0, 1.0)], 2000, 4000);
-    expect(contains(tracker.region, 10, 10)).toBe(true);
+    run(tracker, () => [blinking(5, 5)], 0, 2000);
+    const levels = run(tracker, () => [blinking(42, 30)], 2000, 3000);
+    expect(swing(levels.slice(15))).toBeGreaterThan(0.3); // from 500 ms after the jump
+    expect(contains(tracker.region, 42, 30)).toBe(true);
   });
 
-  it('stays on the last light after it stops blinking', () => {
+  it('keeps showing the last position after the light stops blinking', () => {
     const tracker = new BlinkTracker(W, H);
-    run(tracker, [blinking(30, 8)], 0, 2000);
-    run(tracker, [steady(30, 8, 0.1)], 2000, 6000);
+    run(tracker, () => [blinking(30, 8)], 0, 2000);
+    run(tracker, () => [steady(30, 8, 0.1)], 2000, 6000);
     expect(contains(tracker.region, 30, 8)).toBe(true);
   });
 
-  it('ignores sensor noise below the blink threshold', () => {
+  it('ignores sensor noise and reads the plain frame average until something blinks', () => {
     const tracker = new BlinkTracker(W, H);
-    run(tracker, [blinking(3, 3, 200, 0.1, 0.12)], 0, 2000);
-    expect(contains(tracker.region, W >> 1, H >> 1)).toBe(true);
+    const levels = run(tracker, () => [blinking(3, 3, 200, 0.1, 0.11)], 0, 2000);
+    expect(tracker.region).toEqual({ x: 0, y: 0, w: 1, h: 1 });
+    expect(levels.at(-1)).toBeCloseTo(0.1, 2);
   });
 });

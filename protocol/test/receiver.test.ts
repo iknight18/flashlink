@@ -131,6 +131,32 @@ describe('Receiver with a looping emitter', () => {
   });
 });
 
+describe('Receiver keeps listening', () => {
+  it('goes straight back to searching after a lost frame and decodes the next one', () => {
+    const cut = manchesterEncode(encodeFrame('this one gets cut off'), 200);
+    cut.levels = cut.levels.slice(0, Math.floor(cut.levels.length * 0.5));
+    const next = manchesterEncode(encodeFrame('but this one arrives'), 200);
+    const signal = { halfBitMs: 100, levels: [...cut.levels, ...new Array(30).fill(0), ...next.levels] };
+    const rx = new Receiver();
+    const evs = simulate(signal, { fps: 30 }).flatMap((s) => rx.push(s.t, s.level));
+    const lost = evs.findIndex((e) => e.type === 'error');
+    expect(evs[lost]).toEqual({ type: 'error', reason: 'lost' });
+    expect(evs[lost + 1]).toEqual({ type: 'state', state: 'HUNTING' });
+    expect(messages(evs)).toEqual(['but this one arrives']);
+  });
+
+  it('goes straight back to searching after a checksum failure', () => {
+    const bits = encodeFrame('Hello');
+    const i = 16 + 16 + 7; // last bit of the first payload byte
+    bits[i] = bits[i] === 1 ? 0 : 1;
+    const rx = new Receiver();
+    const evs = simulate(manchesterEncode(bits, 200), { fps: 30 }).flatMap((s) => rx.push(s.t, s.level));
+    const err = evs.findIndex((e) => e.type === 'error');
+    expect(evs[err]).toMatchObject({ type: 'error', reason: 'crc' });
+    expect(evs[err + 1]).toEqual({ type: 'state', state: 'HUNTING' });
+  });
+});
+
 describe('Receiver regressions', () => {
   it('decodes two consecutive frames through one receiver', () => {
     const a = manchesterEncode(encodeFrame('first'), 200);

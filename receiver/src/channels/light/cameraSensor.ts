@@ -51,10 +51,6 @@ export class CameraLightSensor implements Sensor {
     private readonly onRegion?: (region: Region) => void,
   ) {}
 
-  hold(held: boolean): void {
-    this.tracker?.hold(held);
-  }
-
   async start(onSample: (t: number, level: number) => void): Promise<void> {
     this.stopped = false;
     this.stream = await navigator.mediaDevices.getUserMedia({

@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { MinusIcon, PlusIcon } from './icons';
 import { fonts, spring, usePalette } from './theme';
 
 /** Pressable that dips slightly under the finger, with a light haptic tap. */
 export function PressableScale({
-  onPress, disabled, style, children, haptic = true,
+  onPress, onPressIn, onPressOut, disabled, style, children, haptic = true,
 }: {
   onPress(): void;
+  onPressIn?(): void;
+  onPressOut?(): void;
   disabled?: boolean;
   style?: StyleProp<ViewStyle>;
   children: ReactNode;
@@ -18,8 +21,14 @@ export function PressableScale({
   return (
     <Pressable
       disabled={disabled}
-      onPressIn={() => to(0.97)}
-      onPressOut={() => to(1)}
+      onPressIn={() => {
+        to(0.97);
+        onPressIn?.();
+      }}
+      onPressOut={() => {
+        to(1);
+        onPressOut?.();
+      }}
       onPress={() => {
         if (haptic) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
         onPress();
@@ -33,6 +42,72 @@ export function PressableScale({
 export function SectionLabel({ children }: { children: ReactNode }) {
   const p = usePalette();
   return <Text style={[styles.label, { color: p.muted }]}>{children}</Text>;
+}
+
+/** Number stepper: tap to step once, hold to keep stepping. */
+export function Stepper({
+  value, onChange, step, min, max, unit, disabled,
+}: {
+  value: number;
+  onChange(value: number): void;
+  step: number;
+  min: number;
+  max: number;
+  unit: string;
+  disabled?: boolean;
+}) {
+  const p = usePalette();
+  const latest = useRef(value);
+  latest.current = value;
+  const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const stopRepeat = () => {
+    if (timer.current) clearInterval(timer.current);
+    timer.current = null;
+  };
+  useEffect(() => stopRepeat, []);
+
+  const nudge = (dir: 1 | -1) => {
+    const next = Math.min(max, Math.max(min, latest.current + dir * step));
+    if (next === latest.current) {
+      stopRepeat(); // at a limit the button disables itself and may never see the finger lift
+      return;
+    }
+    latest.current = next;
+    Haptics.selectionAsync().catch(() => {});
+    onChange(next);
+  };
+
+  const button = (dir: 1 | -1) => {
+    const atLimit = dir === 1 ? value >= max : value <= min;
+    const Icon = dir === 1 ? PlusIcon : MinusIcon;
+    return (
+      <PressableScale
+        haptic={false}
+        disabled={disabled || atLimit}
+        onPress={() => {}}
+        onPressIn={() => {
+          nudge(dir);
+          stopRepeat();
+          timer.current = setInterval(() => nudge(dir), 120);
+        }}
+        onPressOut={stopRepeat}
+        style={[styles.stepBtn, { backgroundColor: p.surface, borderColor: p.line }]}
+      >
+        <Icon size={20} color={p.text} weight="bold" />
+      </PressableScale>
+    );
+  };
+
+  return (
+    <View style={[styles.stepper, { backgroundColor: p.surface2, borderColor: p.line }, disabled && { opacity: 0.5 }]}>
+      {button(-1)}
+      <View style={styles.stepValue}>
+        <Text style={[styles.stepNumber, { color: p.text }]}>{value}</Text>
+        <Text style={[styles.stepUnit, { color: p.muted }]}>{unit}</Text>
+      </View>
+      {button(1)}
+    </View>
+  );
 }
 
 /** Segmented control with a sliding thumb. */
@@ -90,6 +165,11 @@ export function Segmented<T extends string | number>({
 
 const styles = StyleSheet.create({
   label: { fontFamily: fonts.medium, fontSize: 12, letterSpacing: 0.5, textTransform: 'uppercase' },
+  stepper: { flexDirection: 'row', alignItems: 'center', padding: 4, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth },
+  stepBtn: { width: 52, height: 44, borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center' },
+  stepValue: { flex: 1, flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center', gap: 4 },
+  stepNumber: { fontFamily: fonts.monoMedium, fontSize: 22, letterSpacing: -0.5 },
+  stepUnit: { fontFamily: fonts.regular, fontSize: 13 },
   segmented: { flexDirection: 'row', padding: 4, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth },
   thumb: {
     position: 'absolute',

@@ -12,15 +12,17 @@ import {
 import { channels } from './src/channels/registry';
 import type { Transmitter } from './src/channels/types';
 import { Beacon } from './src/ui/Beacon';
-import { PressableScale, SectionLabel, Segmented } from './src/ui/components';
+import { PressableScale, SectionLabel, Segmented, Stepper } from './src/ui/components';
 import { CrosshairIcon, FlashlightIcon, PaperPlaneTiltIcon, StopIcon, WarningCircleIcon } from './src/ui/icons';
 import { fontAssets, fonts, usePalette } from './src/ui/theme';
 
-const SPEEDS = [
-  { value: 400, label: '400', detail: 'Steady' },
-  { value: 200, label: '200', detail: 'Normal' },
-  { value: 100, label: '100', detail: 'Fast' },
-];
+const BIT_MS = { min: 50, max: 1000, step: 10 };
+
+function speedHint(bitMs: number): string {
+  if (bitMs < 150) return 'Fast. Needs a 60 fps receiver camera.';
+  if (bitMs < 250) return 'Works with most 30 fps cameras.';
+  return 'Most forgiving. Good for long distances or diffuse light.';
+}
 
 /** Dark bit periods between repeats: longer than the receiver's 3-bit timeout. */
 const REPEAT_GAP_BITS = 4;
@@ -173,10 +175,10 @@ function Emitter() {
         </View>
 
         <View style={styles.block}>
-          <SectionLabel>Bit length (ms)</SectionLabel>
-          <Segmented options={SPEEDS} value={bitMs} onChange={setBitMs} disabled={busy} />
+          <SectionLabel>Bit length</SectionLabel>
+          <Stepper value={bitMs} onChange={setBitMs} {...BIT_MS} unit="ms per bit" disabled={busy} />
           <Text style={[styles.helper, { color: p.muted }]}>
-            {bitMs === 100 ? 'Needs a 60 fps receiver camera.' : bitMs === 200 ? 'Works with most 30 fps cameras.' : 'Most forgiving. Use it for long distances or diffuse light.'}
+            {speedHint(bitMs)}
           </Text>
         </View>
 

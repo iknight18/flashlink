@@ -62,10 +62,13 @@
 
           <p class="alert" id="error" role="alert" hidden></p>
 
-          <section class="output">
-            <span class="section-label">Latest message</span>
-            <pre class="message" id="message"></pre>
-            <p class="message-empty" id="message-empty">Nothing received yet. Messages appear here as soon as the checksum passes.</p>
+          <section class="feed">
+            <div class="feed-head">
+              <span class="section-label">Messages</span>
+              <span class="feed-count" id="feed-count"></span>
+            </div>
+            <ol class="feed-list" id="feed"></ol>
+            <p class="feed-empty" id="feed-empty">Nothing yet. Messages appear here one after another, streaming in as they arrive, for as long as the receiver runs.</p>
           </section>
 
           <dl class="stats">
@@ -82,10 +85,6 @@
             <canvas id="histogram" class="histogram"></canvas>
           </details>
 
-          <section class="history">
-            <span class="section-label">History</span>
-            <ol id="history" class="history-list"></ol>
-          </section>
         </aside>
       </main>
     </div>
