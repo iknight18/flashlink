@@ -15,6 +15,14 @@ export function manchesterEncode(bits: Bit[], bitMs: number): TimedLevels {
   return { halfBitMs: bitMs / 2, levels };
 }
 
+/**
+ * Appends `bits` bit periods of darkness. Between repeats this gives the receiver a
+ * silence longer than its 3-bit timeout, so each pass starts from a clean lock.
+ */
+export function withIdleGap(signal: TimedLevels, bits: number): TimedLevels {
+  return { halfBitMs: signal.halfBitMs, levels: [...signal.levels, ...new Array<Level>(bits * 2).fill(0)] };
+}
+
 /** Steady 1010… pattern used to measure a channel's real timing jitter. */
 export function calibrationSignal(bitMs: number, durationMs: number): TimedLevels {
   const count = Math.floor(durationMs / bitMs);

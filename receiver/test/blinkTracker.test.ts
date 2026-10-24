@@ -64,6 +64,29 @@ describe('BlinkTracker', () => {
     expect(contains(tracker.region, 40, 30)).toBe(true);
   });
 
+  it('follows a light that drifts while held, keeping its contrast', () => {
+    const tracker = new BlinkTracker(W, H);
+    run(tracker, [blinking(10, 18)], 0, 2000);
+    tracker.hold(true);
+    // The sender's hand drifts: the light moves one cell every 150 ms, 12 cells in total.
+    const levels: number[] = [];
+    for (let t = 2000; t < 2000 + 12 * 150; t += FRAME) {
+      const x = 10 + Math.floor((t - 2000) / 150);
+      levels.push(tracker.push(t, frame(t, [blinking(x, 18)])));
+    }
+    expect(contains(tracker.region, 21, 18)).toBe(true);
+    const tail = levels.slice(-15);
+    expect(Math.max(...tail) - Math.min(...tail)).toBeGreaterThan(0.3);
+  });
+
+  it('does not jump to a distant light while held', () => {
+    const tracker = new BlinkTracker(W, H);
+    run(tracker, [blinking(10, 10)], 0, 2000);
+    tracker.hold(true);
+    run(tracker, [blinking(10, 10), blinking(40, 30, 200, 0.0, 1.0)], 2000, 4000);
+    expect(contains(tracker.region, 10, 10)).toBe(true);
+  });
+
   it('stays on the last light after it stops blinking', () => {
     const tracker = new BlinkTracker(W, H);
     run(tracker, [blinking(30, 8)], 0, 2000);

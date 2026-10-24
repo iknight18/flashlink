@@ -8,7 +8,8 @@ export type ReceiverState = 'HUNTING' | 'LOCKED' | 'READING' | 'DONE' | 'ERROR';
 export type ReceiverEvent =
   | { type: 'state'; state: ReceiverState }
   | { type: 'interval'; ms: number }
-  | { type: 'progress'; received: number; length: number }
+  /** `text` is the payload so far: streamed for display, not yet checked by the CRC. */
+  | { type: 'progress'; received: number; length: number; text: string }
   | { type: 'message'; text: string }
   | { type: 'error'; reason: 'crc'; bestGuess: string }
   | { type: 'error'; reason: 'lost' };
@@ -68,9 +69,9 @@ export class Receiver {
       if (!ev) continue;
       if (ev.type === 'header') {
         this.setState('READING', events);
-        events.push({ type: 'progress', received: 0, length: ev.length });
+        events.push({ type: 'progress', received: 0, length: ev.length, text: '' });
       } else if (ev.type === 'progress') {
-        events.push(ev);
+        events.push({ ...ev, text: this.frame.partialText });
       } else if (ev.type === 'done') {
         events.push({ type: 'message', text: ev.text });
         this.finish('DONE', events);

@@ -44,6 +44,8 @@ const COPY: Record<UiState, { pill: string; title: string; text: string }> = {
 
 let sensor: Sensor | null = null;
 let region: Region | null = null;
+/** Last text that passed its checksum; a later failed repeat must not replace it. */
+let verified: string | null = null;
 
 function setStartButton(running: boolean): void {
   startBtn.innerHTML = running ? `${icon('stop', 16)}Stop` : `${icon('play', 16)}Start`;
@@ -92,16 +94,35 @@ function showStats(s: SignalStats): void {
 }
 
 function addHistory(text: string): void {
+  // A looping emitter sends the same message over and over: count repeats on one row.
+  const first = historyEl.firstElementChild as HTMLLIElement | null;
+  if (first?.dataset.text === text) {
+    const count = Number(first.dataset.count) + 1;
+    first.dataset.count = String(count);
+    first.querySelector('time')!.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    first.querySelector('.count')!.textContent = `×${count}`;
+    return;
+  }
   const li = document.createElement('li');
+  li.dataset.text = text;
+  li.dataset.count = '1';
   const time = document.createElement('time');
   const now = new Date();
   time.dateTime = now.toISOString();
   time.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   const span = document.createElement('span');
   span.textContent = text;
-  li.append(time, span);
+  const count = document.createElement('b');
+  count.className = 'count';
+  li.append(time, span, count);
   historyEl.prepend(li);
   while (historyEl.children.length > 20) historyEl.lastElementChild!.remove();
+}
+
+function showMessage(text: string, kind: 'streaming' | 'verified' | 'corrupted'): void {
+  messageEl.textContent = text;
+  messageEl.toggleAttribute('data-streaming', kind === 'streaming');
+  messageEl.toggleAttribute('data-corrupted', kind === 'corrupted');
 }
 
 function handle(e: ReceiverEvent): void {
@@ -117,17 +138,24 @@ function handle(e: ReceiverEvent): void {
     case 'progress':
       statusText.textContent = `${e.received} of ${e.length} bytes`;
       progressFill.style.transform = `scaleX(${e.length ? e.received / e.length : 1})`;
+      // A repeat of the verified message stays put; a different message streams in.
+      if (verified === null || !verified.startsWith(e.text)) showMessage(e.text, 'streaming');
       break;
     case 'message':
-      messageEl.removeAttribute('data-corrupted');
-      messageEl.textContent = e.text;
+      verified = e.text;
+      showMessage(e.text, 'verified');
       addHistory(e.text);
       break;
     case 'error':
-      if (e.reason === 'crc') {
-        messageEl.setAttribute('data-corrupted', '');
-        messageEl.textContent = e.bestGuess;
-        statusText.textContent = 'Checksum failed, so this text is a best guess. Ask the sender to resend.';
+      if (verified !== null) {
+        // Keep the verified copy; the emitter is likely looping and will send it again.
+        showMessage(verified, 'verified');
+        statusText.textContent = 'A repeat was garbled. The message shown was verified earlier.';
+      } else if (e.reason === 'crc') {
+        showMessage(e.bestGuess, 'corrupted');
+        statusText.textContent = 'Checksum failed, so this is a best guess. If the sender is repeating, the next pass will fix it.';
+      } else {
+        messageEl.removeAttribute('data-streaming');
       }
       break;
   }
@@ -152,7 +180,7 @@ async function start(): Promise<void> {
   try {
     await sensor.start((t, level) => {
       graph.push(t, level, rx.threshold);
-      diag.sample(t, level, rx.threshold);
+      diag.sample(t, level, rx.threshold, rx.skewMs);
       for (const e of rx.push(t, level)) {
         handle(e);
         diag.event(e);
@@ -182,6 +210,7 @@ function stop(): void {
   sensor?.stop();
   sensor = null;
   region = null;
+  verified = null;
   aim.hidden = true;
   viewport.dataset.camera = 'off';
   graph.clear();

@@ -286,6 +286,17 @@ video { display: block; width: 100%; height: auto; }
 }
 .message:empty { display: none; }
 .message[data-corrupted] { color: var(--danger); }
+.message[data-streaming] { color: var(--muted); }
+.message[data-streaming]::after {
+  content: '';
+  display: inline-block;
+  width: 2px;
+  height: 1.05em;
+  margin-left: 2px;
+  vertical-align: -0.15em;
+  background: var(--accent);
+  animation: caret 1s steps(1) infinite;
+}
 .message:not(:empty) + .message-empty { display: none; }
 .message-empty { margin: 0; color: var(--muted); }
 
@@ -330,7 +341,7 @@ video { display: block; width: 100%; height: auto; }
 .history-list:empty::after { content: 'Received messages will be listed here.'; color: var(--faint); font-size: 13px; }
 .history-list li {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto 1fr auto;
   gap: 12px;
   padding: 10px 0;
   border-top: 1px solid var(--line);
@@ -339,12 +350,15 @@ video { display: block; width: 100%; height: auto; }
 }
 .history-list time { font: 400 12px/1.9 var(--mono); color: var(--muted); }
 .history-list span { word-break: break-word; }
+.history-list .count { font: 500 12px/1.9 var(--mono); color: var(--accent); }
+.history-list li[data-count='1'] .count { visibility: hidden; }
 
 /* ---------- Motion ---------- */
 
 @keyframes breathe { 50% { transform: scale(0.6); opacity: 0.45; } }
 @keyframes ping { 0% { transform: scale(0.9); opacity: 0.7; } 100% { transform: scale(1.35); opacity: 0; } }
 @keyframes shimmer { to { background-position: -200% 0; } }
+@keyframes caret { 50% { opacity: 0; } }
 @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
 
 @media (prefers-reduced-motion: reduce) {

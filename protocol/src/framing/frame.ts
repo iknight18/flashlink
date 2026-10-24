@@ -33,6 +33,17 @@ export function encodeFrame(text: string): Bit[] {
   return [...preamble, ...bytesToBits(new Uint8Array([SYNC_BYTE, ...body, crc8(body)]))];
 }
 
+/** Length of the longest prefix of `bytes` that ends on a whole UTF-8 character. */
+function completeUtf8Length(bytes: number[]): number {
+  for (let back = 1; back <= Math.min(4, bytes.length); back++) {
+    const b = bytes[bytes.length - back];
+    if ((b & 0xc0) === 0x80) continue; // continuation byte: keep looking for the lead byte
+    const need = b >= 0xf0 ? 4 : b >= 0xe0 ? 3 : b >= 0xc0 ? 2 : 1;
+    return need > back ? bytes.length - back : bytes.length;
+  }
+  return bytes.length;
+}
+
 export type FrameEvent =
   | { type: 'header'; length: number }
   | { type: 'progress'; received: number; length: number }
@@ -51,6 +62,12 @@ export class FrameDecoder {
 
   get reading(): boolean {
     return this.stage !== 'sync';
+  }
+
+  /** Payload decoded so far (unverified), cut back to the last whole character. */
+  get partialText(): string {
+    if (this.stage === 'sync' || this.stage === 'length') return '';
+    return new TextDecoder().decode(new Uint8Array(this.payload.slice(0, completeUtf8Length(this.payload))));
   }
 
   push(bit: Bit): FrameEvent | null {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Receiver, type ReceiverEvent } from '../src/receiver';
 import { encodeFrame } from '../src/framing/frame';
-import { manchesterEncode } from '../src/modulation/manchester/encode';
+import { manchesterEncode, withIdleGap } from '../src/modulation/manchester/encode';
 import { simulate, type SimOptions } from '../src/simulator/simulate';
 
 function transmit(text: string, bitMs: number, sim: SimOptions): ReceiverEvent[] {
@@ -100,6 +100,34 @@ describe('Receiver with a slow-switching torch (device test, 2026-10-24)', () =>
       if (!got.includes(text)) failed.push(seed);
     }
     expect(200 - failed.length, `failed seeds: ${failed.join(',')}`).toBeGreaterThanOrEqual(190);
+  });
+});
+
+describe('Receiver streaming', () => {
+  it('streams the text decoded so far, never showing half of a multi-byte character', () => {
+    const text = 'héllo 👋 world';
+    const evs = transmit(text, 200, { fps: 30 });
+    const partials = evs.flatMap((e) => (e.type === 'progress' ? [e.text] : []));
+    expect(partials[0]).toBe('');
+    expect(partials.at(-1)).toBe(text);
+    for (let i = 1; i < partials.length; i++) expect(partials[i].startsWith(partials[i - 1])).toBe(true);
+    expect(partials.some((p) => p.includes('�'))).toBe(false);
+  });
+});
+
+describe('Receiver with a looping emitter', () => {
+  it('joins halfway through one pass and decodes the next', () => {
+    const text = 'Meet at the north gate, 21:40';
+    const pass = withIdleGap(manchesterEncode(encodeFrame(text), 200), 4);
+    const looped = { halfBitMs: pass.halfBitMs, levels: [...pass.levels, ...pass.levels, ...pass.levels] };
+    const passMs = pass.levels.length * pass.halfBitMs;
+    const rx = new Receiver();
+    const evs = simulate(looped, { fps: 30, jitterMs: 8, noise: 0.03, seed: 4, leadInMs: 1000 })
+      .filter((s) => s.t > 1000 + passMs * 0.5) // the receiver starts mid-way through pass 1
+      .flatMap((s) => rx.push(s.t, s.level));
+    const got = messages(evs);
+    expect(got.length).toBeGreaterThanOrEqual(1);
+    expect(got.every((m) => m === text)).toBe(true);
   });
 });
 

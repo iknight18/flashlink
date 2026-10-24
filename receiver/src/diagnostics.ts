@@ -17,6 +17,8 @@ export interface SignalStats {
   level: [number, number];
   contrast: number;
   threshold: number | null;
+  /** Measured transmitter turn-on delay being corrected (ms). */
+  skew: number;
   edges: { n: number; min?: number; median?: number; max?: number };
   region: [number, number] | null;
 }
@@ -31,6 +33,7 @@ export class Diagnostics {
   private min = Infinity;
   private max = -Infinity;
   private threshold: number | null = null;
+  private skew = 0;
   private intervals: number[] = [];
   private state = 'IDLE';
   private region: Region | null = null;
@@ -45,7 +48,8 @@ export class Diagnostics {
     post({ kind: 'sensor', ...info });
   }
 
-  sample(t: number, level: number, threshold: number | null): void {
+  sample(t: number, level: number, threshold: number | null, skew = 0): void {
+    this.skew = skew;
     this.windowStart ??= t;
     this.frames++;
     this.min = Math.min(this.min, level);
@@ -78,6 +82,7 @@ export class Diagnostics {
       level: [round(this.min), round(this.max)],
       contrast: round(this.max - this.min),
       threshold: this.threshold === null ? null : round(this.threshold),
+      skew: round(this.skew, 1),
       edges: sorted.length
         ? { n: sorted.length, min: Math.round(sorted[0]), median: Math.round(sorted[sorted.length >> 1]), max: Math.round(sorted[sorted.length - 1]) }
         : { n: 0 },

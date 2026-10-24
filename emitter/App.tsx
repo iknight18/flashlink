@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import { Animated, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Animated, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
@@ -7,7 +7,7 @@ import * as Haptics from 'expo-haptics';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import {
   calibrationSignal, encodeFrame, manchesterEncode, MAX_PAYLOAD, PREAMBLE_BITS,
-  runSchedule, utf8Length, type Level, type TimedLevels,
+  runSchedule, utf8Length, withIdleGap, type Level, type TimedLevels,
 } from '@flashlink/protocol';
 import { channels } from './src/channels/registry';
 import type { Transmitter } from './src/channels/types';
@@ -22,7 +22,10 @@ const SPEEDS = [
   { value: 100, label: '100', detail: 'Fast' },
 ];
 
-type Job = { kind: 'send' | 'calibrate'; progress: number; startedAt: number; durationMs: number };
+/** Dark bit periods between repeats: longer than the receiver's 3-bit timeout. */
+const REPEAT_GAP_BITS = 4;
+
+type Job = { kind: 'send' | 'calibrate'; loop: boolean; pass: number; progress: number; durationMs: number };
 
 export default function App() {
   const [loaded] = useFonts(fontAssets);
@@ -47,6 +50,7 @@ function Emitter() {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastSent, setLastSent] = useState<string | null>(null);
+  const [repeat, setRepeat] = useState(true);
   const tx = useRef<Transmitter | null>(null);
   const abort = useRef<AbortController | null>(null);
   const level = useRef(new Animated.Value(0)).current;
@@ -62,7 +66,7 @@ function Emitter() {
   const seconds = ((PREAMBLE_BITS + 8 * (3 + bytes)) * bitMs) / 1000;
   const busy = job !== null;
 
-  async function play(kind: Job['kind'], signal: TimedLevels) {
+  async function play(kind: Job['kind'], signal: TimedLevels, loop = false) {
     if (abort.current) return;
     if (!tx.current) {
       setError('The flashlight is not ready yet. Allow camera access and wait for the preview to start.');
@@ -72,20 +76,25 @@ function Emitter() {
     const ctrl = new AbortController();
     abort.current = ctrl;
     const durationMs = signal.levels.length * signal.halfBitMs;
-    setJob({ kind, progress: 0, startedAt: Date.now(), durationMs });
+    setJob({ kind, loop, pass: 1, progress: 0, durationMs });
     const setLevel = (l: Level) => {
       tx.current?.setLevel(l);
       level.setValue(l);
     };
     try {
       await activateKeepAwakeAsync('flashlink-tx');
-      await runSchedule(signal, setLevel, {
-        abort: ctrl.signal,
-        onProgress: (done, total) => setJob((j) => j && { ...j, progress: done / total }),
-      });
-      if (!ctrl.signal.aborted) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-        if (kind === 'send') setLastSent(text);
+      for (let pass = 1; ; pass++) {
+        setJob((j) => j && { ...j, pass, progress: 0 });
+        await runSchedule(signal, setLevel, {
+          abort: ctrl.signal,
+          onProgress: (done, total) => setJob((j) => j && { ...j, progress: done / total }),
+        });
+        if (ctrl.signal.aborted) break;
+        if (pass === 1) {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+          if (kind === 'send') setLastSent(text);
+        }
+        if (!loop) break;
       }
     } finally {
       level.setValue(0);
@@ -121,7 +130,9 @@ function Emitter() {
             <Text style={[styles.heroText, { color: p.muted }]} numberOfLines={3}>{status.text}</Text>
             {job && (
               <Text style={[styles.heroMeta, { color: p.accent }]}>
-                {Math.round(job.progress * 100)}% · {Math.max(0, Math.ceil((job.durationMs * (1 - job.progress)) / 1000))} s left
+                {job.loop ? `Pass ${job.pass} · ` : ''}
+                {Math.round(job.progress * 100)}% · {Math.max(0, Math.ceil((job.durationMs * (1 - job.progress)) / 1000))} s
+                {job.loop ? ' to next pass' : ' left'}
               </Text>
             )}
           </View>
@@ -169,6 +180,21 @@ function Emitter() {
           </Text>
         </View>
 
+        <View style={[styles.toggle, { borderColor: p.line }]}>
+          <View style={styles.toggleCopy}>
+            <Text style={[styles.toggleTitle, { color: p.text }]}>Repeat until stopped</Text>
+            <Text style={[styles.helper, { color: p.muted }]}>The receiver can join at any time and recovers from a missed pass.</Text>
+          </View>
+          <Switch
+            value={repeat}
+            onValueChange={setRepeat}
+            disabled={busy}
+            trackColor={{ true: p.accent, false: p.surface2 }}
+            thumbColor="#ffffff"
+            ios_backgroundColor={p.surface2}
+          />
+        </View>
+
         {busy ? (
           <View style={styles.block}>
             <View style={[styles.track, { backgroundColor: p.surface2 }]}>
@@ -182,7 +208,9 @@ function Emitter() {
         ) : (
           <View style={styles.actions}>
             <PressableScale
-              onPress={() => play('send', manchesterEncode(encodeFrame(text), bitMs)).catch(fail)}
+              onPress={() =>
+                play('send', withIdleGap(manchesterEncode(encodeFrame(text), bitMs), REPEAT_GAP_BITS), repeat).catch(fail)
+              }
               disabled={tooLong || empty}
               style={[styles.button, styles.primary, { backgroundColor: p.accent }]}
             >
@@ -211,6 +239,8 @@ function Emitter() {
 }
 
 function describe(job: Job | null, ready: boolean, lastSent: string | null): { title: string; text: string } {
+  if (job?.kind === 'send' && job.loop)
+    return { title: 'Sending on repeat', text: 'Keep the flashlight on the receiver. Stop once it shows the message.' };
   if (job?.kind === 'send') return { title: 'Sending', text: 'Keep the flashlight pointed at the receiver.' };
   if (job?.kind === 'calibrate') return { title: 'Calibrating', text: 'Steady blinking for 10 seconds so the receiver can lock on.' };
   if (!ready) return { title: 'Getting ready', text: 'The flashlight needs camera access first.' };
@@ -243,6 +273,16 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   helper: { fontFamily: fonts.regular, fontSize: 13 },
+  toggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    paddingVertical: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  toggleCopy: { flex: 1, gap: 2 },
+  toggleTitle: { fontFamily: fonts.medium, fontSize: 15 },
   actions: { gap: 10 },
   button: {
     flexDirection: 'row',
