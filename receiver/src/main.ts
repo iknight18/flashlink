@@ -67,6 +67,7 @@ async function start(): Promise<void> {
   const def = channels.find((c) => c.id === select.value)!;
   const rx = new Receiver();
   sensor = def.create({ video });
+  startBtn.disabled = true;
   try {
     await sensor.start((t, level) => {
       graph.push(t, level, rx.threshold);
@@ -75,11 +76,14 @@ async function start(): Promise<void> {
     setState('HUNTING');
     startBtn.textContent = 'Stop';
   } catch (err) {
+    sensor?.stop();
     sensor = null;
     if (!window.isSecureContext) showError('Camera needs HTTPS. Open the https:// URL that Vite printed.');
     else if (err instanceof DOMException && err.name === 'NotAllowedError')
       showError('Camera permission denied. Allow camera access for this site in your browser settings.');
     else showError(`Could not start the sensor: ${(err as Error).message}`);
+  } finally {
+    startBtn.disabled = false;
   }
 }
 
