@@ -36,7 +36,7 @@ export default function App() {
 
   async function play(signal: TimedLevels) {
     if (abort.current) return;
-    if (!tx.current) { setError('Channel not ready; grant permission first.'); return; }
+    if (!tx.current) { setError('Channel not ready yet. Grant camera permission and wait for the preview to start.'); return; }
     setError(null);
     const ctrl = new AbortController();
     abort.current = ctrl;
