@@ -2,30 +2,92 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0e0e10" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f6f6f7" media="(prefers-color-scheme: light)" />
     <title>FlashLink Receiver</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <main>
-      <h1>FlashLink Receiver</h1>
-      <div class="row">
-        <label>Channel <select id="channel"></select></label>
-        <button id="start">Start</button>
-      </div>
-      <div class="viewport">
-        <video id="video" playsinline muted></video>
-        <div id="aim" class="aim"></div>
-      </div>
-      <p>State: <span id="state" class="badge">IDLE</span> <span id="progress"></span></p>
-      <canvas id="graph" width="600" height="120"></canvas>
-      <pre id="message"></pre>
-      <p id="error" class="error" hidden></p>
-      <details>
-        <summary>Calibration (edge intervals)</summary>
-        <pre id="histogram"></pre>
-      </details>
-    </main>
+    <div class="app">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark" id="brand-mark"></span>
+          <span class="brand-name">FlashLink</span>
+          <span class="brand-role">Receiver</span>
+        </div>
+        <div class="controls">
+          <label class="field field-inline">
+            <span class="field-label">Channel</span>
+            <select id="channel" class="select"></select>
+          </label>
+          <button id="start" class="btn btn-primary" type="button"></button>
+        </div>
+      </header>
+
+      <main class="layout">
+        <section class="stage" aria-label="Camera">
+          <div class="viewport" id="viewport" data-camera="off">
+            <video id="video" playsinline muted></video>
+            <div id="aim" class="aim" hidden><span></span></div>
+            <div class="viewport-empty" id="empty">
+              <span class="empty-icon" id="empty-icon"></span>
+              <p class="empty-title">Camera is off</p>
+              <p class="empty-text">Start the receiver and point it at the sender's flashlight. It finds the blinking light on its own.</p>
+            </div>
+            <div class="viewport-skeleton" aria-hidden="true"></div>
+            <div class="hud">
+              <span class="pill" id="pill"><span class="dot"></span><span id="pill-text">Idle</span></span>
+            </div>
+          </div>
+
+          <figure class="meter">
+            <figcaption class="meter-head">
+              <span class="section-label">Signal</span>
+              <span class="legend"><i class="swatch swatch-level"></i>Brightness <i class="swatch swatch-threshold"></i>Threshold</span>
+            </figcaption>
+            <canvas id="graph" class="graph"></canvas>
+          </figure>
+        </section>
+
+        <aside class="panel">
+          <section class="status" aria-live="polite">
+            <p class="status-title" id="status-title">Ready when you are</p>
+            <p class="status-text" id="status-text">Press Start to open the camera.</p>
+            <div class="progress" id="progress" hidden><span class="progress-fill" id="progress-fill"></span></div>
+          </section>
+
+          <p class="alert" id="error" role="alert" hidden></p>
+
+          <section class="output">
+            <span class="section-label">Latest message</span>
+            <pre class="message" id="message"></pre>
+            <p class="message-empty" id="message-empty">Nothing received yet. Messages appear here as soon as the checksum passes.</p>
+          </section>
+
+          <dl class="stats">
+            <div><dt>Frame rate</dt><dd id="stat-fps">–</dd></div>
+            <div><dt>Contrast</dt><dd id="stat-contrast">–</dd></div>
+            <div><dt>Edge median</dt><dd id="stat-median">–</dd></div>
+            <div><dt>Edge spread</dt><dd id="stat-spread">–</dd></div>
+          </dl>
+
+          <details class="calibration">
+            <summary>Timing histogram</summary>
+            <p class="hint">Tap Calibrate on the emitter. A tight peak at the bit length means the link can go faster.</p>
+            <canvas id="histogram" class="histogram"></canvas>
+          </details>
+
+          <section class="history">
+            <span class="section-label">History</span>
+            <ol id="history" class="history-list"></ol>
+          </section>
+        </aside>
+      </main>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

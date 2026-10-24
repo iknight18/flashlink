@@ -27,7 +27,8 @@
         {
           "cameraPermission": "FlashLink uses the camera only to control the flashlight."
         }
-      ]
+      ],
+      "expo-font"
     ]
   }
 }

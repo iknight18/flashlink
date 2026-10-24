@@ -10,9 +10,21 @@ function post(entry: object): void {
 
 const round = (v: number, digits = 3) => Number(v.toFixed(digits));
 
+/** One second of signal health, shown in the UI and logged in dev. */
+export interface SignalStats {
+  state: string;
+  fps: number;
+  level: [number, number];
+  contrast: number;
+  threshold: number | null;
+  edges: { n: number; min?: number; median?: number; max?: number };
+  region: [number, number] | null;
+}
+
 /**
- * Dev-only: sends a one-line summary per second plus every notable receiver event
- * to the Vite server, which prints it and appends it to receiver/logs/.
+ * Summarises the signal once per second for the UI. In dev it also sends each summary
+ * and every notable receiver event to the Vite server, which prints it and appends it
+ * to receiver/logs/.
  */
 export class Diagnostics {
   private frames = 0;
@@ -24,7 +36,7 @@ export class Diagnostics {
   private region: Region | null = null;
   private windowStart: number | null = null;
 
-  constructor() {
+  constructor(private readonly onStats?: (stats: SignalStats) => void) {
     post({ kind: 'session', userAgent: navigator.userAgent });
   }
 
@@ -55,8 +67,7 @@ export class Diagnostics {
   private flush(t: number): void {
     const elapsed = t - this.windowStart!;
     const sorted = [...this.intervals].sort((a, b) => a - b);
-    post({
-      kind: 'stats',
+    const stats: SignalStats = {
       state: this.state,
       fps: round((this.frames * 1000) / elapsed, 1),
       level: [round(this.min), round(this.max)],
@@ -66,7 +77,9 @@ export class Diagnostics {
         ? { n: sorted.length, min: Math.round(sorted[0]), median: Math.round(sorted[sorted.length >> 1]), max: Math.round(sorted[sorted.length - 1]) }
         : { n: 0 },
       region: this.region && [round(this.region.x + this.region.w / 2, 2), round(this.region.y + this.region.h / 2, 2)],
-    });
+    };
+    this.onStats?.(stats);
+    post({ kind: 'stats', ...stats });
     this.windowStart = t;
     this.frames = 0;
     this.min = Infinity;
