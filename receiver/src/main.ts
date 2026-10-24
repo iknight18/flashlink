@@ -36,6 +36,7 @@ function positionAim(): void {
   aim.style.width = aim.style.height = `${side}px`;
 }
 video.addEventListener('loadedmetadata', positionAim);
+video.addEventListener('resize', positionAim);
 window.addEventListener('resize', positionAim);
 
 function handle(e: ReceiverEvent): void {
