@@ -1,5 +1,6 @@
 import { FrameDecoder } from './framing/frame';
 import { ManchesterDecoder, type ManchesterDecoderOptions } from './modulation/manchester/decode';
+import { DutyCorrector, type DutyCorrectorOptions } from './signal/dutyCorrector';
 import { EdgeDetector, type EdgeDetectorOptions } from './signal/edgeDetector';
 
 export type ReceiverState = 'HUNTING' | 'LOCKED' | 'READING' | 'DONE' | 'ERROR';
@@ -15,6 +16,7 @@ export type ReceiverEvent =
 export interface ReceiverOptions {
   edge?: EdgeDetectorOptions;
   demod?: ManchesterDecoderOptions;
+  duty?: DutyCorrectorOptions;
 }
 
 /** Sensor samples in, decoded messages out. Channel-agnostic: any sensor producing levels works. */
@@ -22,28 +24,36 @@ export class Receiver {
   state: ReceiverState = 'HUNTING';
   private readonly edges: EdgeDetector;
   private readonly demod: ManchesterDecoder;
+  private readonly duty: DutyCorrector;
   private readonly frame = new FrameDecoder();
   private lastEdgeT: number | null = null;
 
   constructor(opts: ReceiverOptions = {}) {
     this.edges = new EdgeDetector(opts.edge);
     this.demod = new ManchesterDecoder(opts.demod);
+    this.duty = new DutyCorrector(opts.duty);
   }
 
   get threshold(): number | null {
     return this.edges.threshold;
   }
 
+  /** Measured delay of the transmitter's off→on switching (ms), removed before decoding. */
+  get skewMs(): number {
+    return this.duty.skewMs;
+  }
+
   push(t: number, level: number): ReceiverEvent[] {
     const events: ReceiverEvent[] = [];
-    const edge = this.edges.push(t, level);
-    if (!edge) {
+    const raw = this.edges.push(t, level);
+    if (!raw) {
       if (this.demod.checkTimeout(t)) this.onLost(events);
       return events;
     }
 
-    if (this.lastEdgeT !== null) events.push({ type: 'interval', ms: edge.t - this.lastEdgeT });
-    this.lastEdgeT = edge.t;
+    if (this.lastEdgeT !== null) events.push({ type: 'interval', ms: raw.t - this.lastEdgeT });
+    this.lastEdgeT = raw.t;
+    const edge = this.duty.push(raw);
 
     const wasLocked = this.demod.state === 'LOCKED';
     const bits = this.demod.pushEdge(edge);

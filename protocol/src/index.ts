@@ -3,6 +3,7 @@ export * from './framing/crc8';
 export * from './framing/frame';
 export * from './modulation/manchester/encode';
 export * from './signal/edgeDetector';
+export * from './signal/dutyCorrector';
 export * from './modulation/manchester/decode';
 export * from './receiver';
 export * from './simulator/simulate';

@@ -84,6 +84,25 @@ describe('Receiver robustness sweeps', () => {
   });
 });
 
+describe('Receiver with a slow-switching torch (device test, 2026-10-24)', () => {
+  // On the iPhone the torch turned on ~25-45 ms later than it turned off; at 200 ms/bit
+  // that alone dropped decoding to ~50%. The receiver must calibrate it away.
+  it.each([25, 33, 45])('decodes 200 ms/bit at 30 fps with a %i ms turn-on delay', (onDelayMs) => {
+    const text = 'Meet at the north gate, 21:40';
+    const failed: number[] = [];
+    for (let seed = 1; seed <= 200; seed++) {
+      const rx = new Receiver();
+      const evs = simulate(manchesterEncode(encodeFrame(text), 200), {
+        fps: 30, jitterMs: 10, noise: 0.02, seed, onDelayMs, low: 0.04, high: 0.8,
+      }).flatMap((s) => rx.push(s.t, s.level));
+      const got = messages(evs);
+      expect(got.every((m) => m === text)).toBe(true);
+      if (!got.includes(text)) failed.push(seed);
+    }
+    expect(200 - failed.length, `failed seeds: ${failed.join(',')}`).toBeGreaterThanOrEqual(190);
+  });
+});
+
 describe('Receiver regressions', () => {
   it('decodes two consecutive frames through one receiver', () => {
     const a = manchesterEncode(encodeFrame('first'), 200);
