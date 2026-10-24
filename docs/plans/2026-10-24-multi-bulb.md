@@ -150,3 +150,13 @@ Tests (synthetic frames): 4 tiles blinking independently produce 4 sources with 
 - Channel (Torch / Screen bulbs), bulb-count stepper 1–9 (screen only), coding (Pulse-length default / Manchester), slot-length stepper (rename the label to "Slot length"; with Manchester a bit is 2 slots), and the repeat toggle.
 - The ETA uses the real signal length. Each new Send uses a new `msgId`; repeats reuse it.
 - `tsc` and the iOS export pass.
+
+---
+
+## Role swap (2026-10-24, after Protocol B)
+
+The user swapped the roles: the **laptop browser is the emitter** and the **iPhone is the receiver**. Expo Go can't read camera frames fast enough, so the phone receiver is the existing web app opened in iPhone Safari. This replaces the "Emitter app" tasks:
+
+- **W1, phone receiver:** tasks R1 and R2 as written, on iPhone Safari (rear camera, `playsinline`; manual exposure is optional because iOS doesn't offer it). Add home-screen web-app metadata.
+- **W2, browser emitter:** a new `emitter.html` page in the same Vite app. It has a message box, bulb stepper 1–9, coding (Pulse-length / Manchester), slot-length stepper and repeat toggle. Send shows a fullscreen black page with N white tiles (grid rules as in E2) driven by `runMultiSchedule` setting tile styles directly, keeps the screen awake with the Wake Lock API, and has a small Stop button. The two pages link to each other.
+- **X1, Expo app:** a minimal port to the v2 API (torch is 1 lane via `buildTransmission`, plus a coding switch) so it keeps compiling and the torch still works as an alternative emitter.
