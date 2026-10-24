@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FlashLink Receiver</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <main>
+      <h1>FlashLink Receiver</h1>
+      <div class="row">
+        <label>Channel <select id="channel"></select></label>
+        <button id="start">Start</button>
+      </div>
+      <div class="viewport">
+        <video id="video" playsinline muted></video>
+        <div id="aim" class="aim"></div>
+      </div>
+      <p>State: <span id="state" class="badge">IDLE</span> <span id="progress"></span></p>
+      <canvas id="graph" width="600" height="120"></canvas>
+      <pre id="message"></pre>
+      <p id="error" class="error" hidden></p>
+      <details>
+        <summary>Calibration (edge intervals)</summary>
+        <pre id="histogram"></pre>
+      </details>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
