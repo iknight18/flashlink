@@ -1,4 +1,5 @@
 import type { Level, TimedLevels } from '../modulation/manchester/encode';
+import type { MultiTimedLevels } from './transmission';
 
 export interface Clock {
   now(): number;
@@ -42,5 +43,34 @@ export async function runSchedule(
     if (tail > 0) await clock.sleep(tail);
   } finally {
     setLevel(0);
+  }
+}
+
+/**
+ * Plays several lanes from one clock: every slot, all lanes change together at the
+ * same absolute target time (start + i·slot), so lanes never drift apart. Always
+ * leaves every lane at 0, also on abort.
+ */
+export async function runMultiSchedule(
+  signal: MultiTimedLevels,
+  setLevels: (levels: Level[]) => void,
+  opts: ScheduleOptions = {},
+): Promise<void> {
+  const clock = opts.clock ?? realClock;
+  const total = signal.lanes[0]?.length ?? 0;
+  const start = clock.now();
+  try {
+    for (let i = 0; i < total; i++) {
+      if (opts.abort?.aborted) return;
+      const wait = start + i * signal.slotMs - clock.now();
+      if (wait > 0) await clock.sleep(wait);
+      if (opts.abort?.aborted) return;
+      setLevels(signal.lanes.map((lane) => lane[i]));
+      opts.onProgress?.(i + 1, total);
+    }
+    const tail = start + total * signal.slotMs - clock.now();
+    if (tail > 0) await clock.sleep(tail);
+  } finally {
+    setLevels(signal.lanes.map((): Level => 0));
   }
 }

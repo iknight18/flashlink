@@ -10,5 +10,7 @@ export * from './modulation/manchester/decode';
 export * from './modulation/pulse/encode';
 export * from './modulation/pulse/decode';
 export * from './receiver';
+export * from './multiReceiver';
 export * from './simulator/simulate';
 export * from './signal/scheduler';
+export * from './signal/transmission';
