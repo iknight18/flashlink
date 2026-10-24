@@ -197,7 +197,9 @@ function handle(e: ReceiverEvent): void {
 async function start(): Promise<void> {
   showError(null);
   const def = channels.find((c) => c.id === select.value)!;
-  const rx = new Receiver();
+  // Camera noise on the baseline-relative level is ~0.001 (device logs), so a small
+  // minimum contrast is safe and keeps a faint or distant torch decodable.
+  const rx = new Receiver({ edge: { minContrast: 0.04 } });
   const diag = new Diagnostics(showStats);
   sensor = def.create({ video });
   startBtn.disabled = true;

@@ -1,5 +1,5 @@
 import type { Sensor } from '../types';
-import { brightestLevel } from './frameLevel';
+import { lightLevel } from './frameLevel';
 
 type FrameMeta = { captureTime?: number; expectedDisplayTime: number };
 type VideoWithRvfc = HTMLVideoElement & {
@@ -52,7 +52,7 @@ async function shortenExposure(track: MediaStreamTrack): Promise<string> {
   }
 }
 
-/** Level of the light anywhere in the camera frame (see brightestLevel); nothing is tracked. */
+/** Level of the light anywhere in the camera frame (see lightLevel); nothing is tracked. */
 export class CameraLightSensor implements Sensor {
   readonly id = 'light';
   readonly label = 'Light (camera)';
@@ -103,7 +103,7 @@ export class CameraLightSensor implements Sensor {
         luma[i] = (0.299 * px[i * 4] + 0.587 * px[i * 4 + 1] + 0.114 * px[i * 4 + 2]) / 255;
       }
       const t = meta.captureTime ?? meta.expectedDisplayTime ?? now;
-      onSample(t, brightestLevel(luma));
+      onSample(t, lightLevel(luma));
     };
     this.handle = video.requestVideoFrameCallback(onFrame);
   }
