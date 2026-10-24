@@ -1,6 +1,6 @@
 import { Receiver, type ReceiverEvent, type ReceiverState } from '@flashlink/protocol';
 import { channels } from './channels/registry';
-import type { Region, Sensor } from './channels/types';
+import type { Sensor } from './channels/types';
 import { Diagnostics, reportPageErrors, type SignalStats } from './diagnostics';
 import { Graph } from './ui/graph';
 import { Histogram } from './ui/histogram';
@@ -11,7 +11,6 @@ const select = $<HTMLSelectElement>('channel');
 const startBtn = $<HTMLButtonElement>('start');
 const viewport = $<HTMLDivElement>('viewport');
 const video = $<HTMLVideoElement>('video');
-const aim = $<HTMLDivElement>('aim');
 const pill = $<HTMLSpanElement>('pill');
 const pillText = $<HTMLSpanElement>('pill-text');
 const statusTitle = $<HTMLParagraphElement>('status-title');
@@ -46,7 +45,6 @@ const COPY: Record<UiState, { pill: string; title: string; text: string }> = {
 const NOTICE_MS = 4000;
 
 let sensor: Sensor | null = null;
-let region: Region | null = null;
 /** The row streaming the message currently arriving, if any. */
 let live: HTMLLIElement | null = null;
 let notice = 0;
@@ -65,7 +63,6 @@ function setState(state: UiState): void {
   statusText.textContent = copy.text;
   progress.hidden = state !== 'READING';
   if (state !== 'READING') progressFill.style.transform = 'scaleX(0)';
-  viewport.toggleAttribute('data-tracking', state === 'HUNTING');
 }
 
 function showError(text: string | null): void {
@@ -73,18 +70,6 @@ function showError(text: string | null): void {
   errorEl.innerHTML = text === null ? '' : `${icon('warningCircle', 16)}<span></span>`;
   if (text !== null) errorEl.querySelector('span')!.textContent = text;
 }
-
-/** Moves the aim box over the region the sensor reads, using transforms only. */
-function placeAim(): void {
-  if (!region || !video.clientWidth) return;
-  const w = video.clientWidth;
-  const h = video.clientHeight;
-  aim.hidden = false;
-  aim.style.width = `${region.w * w}px`;
-  aim.style.height = `${region.h * h}px`;
-  aim.style.transform = `translate(${region.x * w}px, ${region.y * h}px)`;
-}
-new ResizeObserver(placeAim).observe(video);
 
 /** Below this, a 100 ms half-bit (200 ms bits) spans fewer than ~2.5 frames and can't be decoded. */
 const MIN_FPS_FOR_200 = 25;
@@ -214,14 +199,7 @@ async function start(): Promise<void> {
   const def = channels.find((c) => c.id === select.value)!;
   const rx = new Receiver();
   const diag = new Diagnostics(showStats);
-  sensor = def.create({
-    video,
-    onRegion: (r) => {
-      region = r;
-      placeAim();
-      diag.setRegion(r);
-    },
-  });
+  sensor = def.create({ video });
   startBtn.disabled = true;
   startBtn.textContent = 'Starting';
   viewport.dataset.camera = 'starting';
@@ -260,11 +238,9 @@ function stop(): void {
   fpsHint.hidden = true;
   sensor?.stop();
   sensor = null;
-  region = null;
   live?.remove();
   live = null;
   updateFeedMeta();
-  aim.hidden = true;
   viewport.dataset.camera = 'off';
   graph.clear();
   setState('IDLE');

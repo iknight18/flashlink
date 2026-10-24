@@ -148,26 +148,6 @@ body {
 video { display: block; width: 100%; height: auto; }
 .viewport[data-camera='off'] video { display: none; }
 
-.aim {
-  position: absolute;
-  left: 0;
-  top: 0;
-  pointer-events: none;
-  border-radius: 10px;
-  border: 1.5px solid var(--accent);
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
-  transition: transform 0.35s var(--ease);
-  will-change: transform;
-}
-.aim > span {
-  position: absolute;
-  inset: -7px;
-  border-radius: 14px;
-  border: 1px solid var(--accent);
-  opacity: 0;
-}
-.viewport[data-tracking] .aim > span { animation: ping 1.8s var(--ease) infinite; }
-
 .viewport-empty {
   position: absolute;
   inset: 0;
@@ -350,7 +330,6 @@ video { display: block; width: 100%; height: auto; }
 /* ---------- Motion ---------- */
 
 @keyframes breathe { 50% { transform: scale(0.6); opacity: 0.45; } }
-@keyframes ping { 0% { transform: scale(0.9); opacity: 0.7; } 100% { transform: scale(1.35); opacity: 0; } }
 @keyframes shimmer { to { background-position: -200% 0; } }
 @keyframes caret { 50% { opacity: 0; } }
 @keyframes glow { 50% { background: var(--accent-soft); } }

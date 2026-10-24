@@ -1,11 +1,3 @@
-/** Normalized (0–1) rectangle in video coordinates. */
-export interface Region {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-
 export interface Sensor {
   id: string;
   label: string;
@@ -18,8 +10,6 @@ export interface Sensor {
 
 export interface SensorContext {
   video: HTMLVideoElement;
-  /** Optional: called when a camera-based sensor moves the region it reads from. */
-  onRegion?(region: Region): void;
 }
 
 export interface ChannelDefinition {

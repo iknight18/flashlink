@@ -1,5 +1,4 @@
 import type { ReceiverEvent } from '@flashlink/protocol';
-import type { Region } from './channels/types';
 
 const ENDPOINT = '/__flashlink/log';
 
@@ -26,7 +25,6 @@ export interface SignalStats {
   /** Measured transmitter turn-on delay being corrected (ms). */
   skew: number;
   edges: { n: number; min?: number; median?: number; max?: number };
-  region: [number, number] | null;
 }
 
 /**
@@ -42,7 +40,6 @@ export class Diagnostics {
   private skew = 0;
   private intervals: number[] = [];
   private state = 'IDLE';
-  private region: Region | null = null;
   private windowStart: number | null = null;
 
   constructor(private readonly onStats?: (stats: SignalStats) => void) {
@@ -74,11 +71,6 @@ export class Diagnostics {
     post({ kind: 'event', ...e });
   }
 
-  setRegion(region: Region): void {
-    this.region = region;
-    post({ kind: 'region', ...Object.fromEntries(Object.entries(region).map(([k, v]) => [k, round(v)])) });
-  }
-
   private flush(t: number): void {
     const elapsed = t - this.windowStart!;
     const sorted = [...this.intervals].sort((a, b) => a - b);
@@ -92,7 +84,6 @@ export class Diagnostics {
       edges: sorted.length
         ? { n: sorted.length, min: Math.round(sorted[0]), median: Math.round(sorted[sorted.length >> 1]), max: Math.round(sorted[sorted.length - 1]) }
         : { n: 0 },
-      region: this.region && [round(this.region.x + this.region.w / 2, 2), round(this.region.y + this.region.h / 2, 2)],
     };
     this.onStats?.(stats);
     post({ kind: 'stats', ...stats });
