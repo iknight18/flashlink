@@ -77,6 +77,7 @@ export class Receiver {
   private onLost(events: ReceiverEvent[]): void {
     const wasReading = this.frame.reading;
     this.frame.reset();
+    this.lastEdgeT = null;
     if (wasReading) {
       events.push({ type: 'error', reason: 'lost' });
       this.setState('ERROR', events);
@@ -88,6 +89,7 @@ export class Receiver {
   private finish(state: ReceiverState, events: ReceiverEvent[]): void {
     this.demod.reset();
     this.frame.reset();
+    this.lastEdgeT = null;
     this.setState(state, events);
   }
 

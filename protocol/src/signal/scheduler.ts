@@ -6,7 +6,8 @@ export interface Clock {
 }
 
 export const realClock: Clock = {
-  now: () => Date.now(),
+  // Monotonic where available (browsers, Hermes); falls back to wall-clock time.
+  now: () => globalThis.performance?.now() ?? Date.now(),
   sleep: (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, ms))),
 };
 
