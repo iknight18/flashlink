@@ -1,6 +1,7 @@
 export * from './framing/bits';
 export * from './framing/crc8';
 export * from './framing/frame';
+export * from './framing/textCodec';
 export * from './modulation/manchester/encode';
 export * from './signal/edgeDetector';
 export * from './signal/dutyCorrector';
