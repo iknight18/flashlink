@@ -301,6 +301,15 @@ video { display: block; width: 100%; height: auto; }
 .stats dt { font-size: 12px; color: var(--muted); }
 .stats dd { margin: 2px 0 0; font: 500 18px var(--mono); letter-spacing: -0.02em; }
 
+.note {
+  margin: -8px 0 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--accent-soft);
+}
+
 .calibration summary { cursor: pointer; font-weight: 500; list-style: none; display: flex; align-items: center; gap: 8px; }
 .calibration summary::-webkit-details-marker { display: none; }
 .calibration summary::before {

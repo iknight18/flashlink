@@ -21,6 +21,7 @@ const progressFill = $<HTMLSpanElement>('progress-fill');
 const messageEl = $<HTMLPreElement>('message');
 const errorEl = $<HTMLParagraphElement>('error');
 const historyEl = $<HTMLOListElement>('history');
+const fpsHint = $<HTMLParagraphElement>('fps-hint');
 
 $('brand-mark').innerHTML = icon('flashlight', 18);
 $('empty-icon').innerHTML = icon('cameraSlash', 22);
@@ -78,8 +79,13 @@ function placeAim(): void {
 }
 new ResizeObserver(placeAim).observe(video);
 
+/** Below this, a 100 ms half-bit (200 ms bits) spans fewer than ~2.5 frames and can't be decoded. */
+const MIN_FPS_FOR_200 = 25;
+
 function showStats(s: SignalStats): void {
   $('stat-fps').textContent = s.fps.toFixed(1);
+  fpsHint.hidden = s.fps >= MIN_FPS_FOR_200;
+  fpsHint.textContent = `The camera is only delivering ${Math.round(s.fps)} fps. That's enough for 400 ms bits, but 200 ms needs about 30 fps. Add light to the room or use a phone as the receiver.`;
   $('stat-contrast').textContent = s.contrast.toFixed(2);
   $('stat-median').textContent = s.edges.median === undefined ? '–' : `${s.edges.median} ms`;
   $('stat-spread').textContent = s.edges.n > 1 ? `${s.edges.max! - s.edges.min!} ms` : '–';
@@ -153,6 +159,8 @@ async function start(): Promise<void> {
       }
     });
     viewport.dataset.camera = 'on';
+    const info = sensor.describe?.();
+    if (info) diag.sensor(info);
     setState('HUNTING');
     setStartButton(true);
   } catch (err) {
@@ -170,6 +178,7 @@ async function start(): Promise<void> {
 }
 
 function stop(): void {
+  fpsHint.hidden = true;
   sensor?.stop();
   sensor = null;
   region = null;

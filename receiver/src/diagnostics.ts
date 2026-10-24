@@ -40,6 +40,11 @@ export class Diagnostics {
     post({ kind: 'session', userAgent: navigator.userAgent });
   }
 
+  /** Logs what the sensor hardware reports after starting. */
+  sensor(info: Record<string, unknown>): void {
+    post({ kind: 'sensor', ...info });
+  }
+
   sample(t: number, level: number, threshold: number | null): void {
     this.windowStart ??= t;
     this.frames++;

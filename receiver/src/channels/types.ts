@@ -14,6 +14,8 @@ export interface Sensor {
   stop(): void;
   /** Optional: freeze any adaptation (e.g. light tracking) while a frame is being read. */
   hold?(held: boolean): void;
+  /** Optional: hardware details for diagnostics, available after start(). */
+  describe?(): Record<string, unknown>;
 }
 
 export interface SensorContext {
