@@ -14,8 +14,8 @@ export interface PulseDecoderOptions {
 const PHASE_GAIN = 0.3;
 /** Fraction of a run's per-slot timing error applied to the slot estimate. */
 const PERIOD_GAIN = 0.05;
-/** Largest turn-on skew accepted at lock, as a fraction of the slot. */
-const MAX_SKEW = 0.45;
+/** Largest turn-on skew accepted at lock, as a fraction of the slot (45 ms torches at 100 ms slots). */
+const MAX_SKEW = 0.6;
 /** Slots without an edge before lock is lost (longest run is 4). */
 const TIMEOUT_SLOTS = PULSE_MAX_RUN + 1;
 
@@ -53,6 +53,10 @@ function fitGrid(edges: Edge[]): { slot: number; skew: number; ref: number; maxR
  * classified as round(corrected length / slot) slots, timed from a phase-locked estimate
  * of the previous edge so one badly sampled edge doesn't shift the next decision too.
  * A run outside 0.5–4.5 slots drops back to hunting.
+ *
+ * Measured through the Receiver (seeds 1–1000, 100 ms slots, 30 fps): 95.5% decoded with
+ * ±8 ms jitter, noise 0.03 and 1% frame drops; 97.5% / 98.6% / 97.5% with a 25 / 33 / 45 ms
+ * turn-on delay. Failures are CRC rejections, lost lock or no lock; none delivered wrong text.
  *
  * Expects raw edges: the skew is measured here because pulse-length code is not on half
  * the time, so the receiver's duty-cycle correction doesn't apply to it.

@@ -90,8 +90,9 @@ export class ManchesterDecoder {
    * The mid-edge reference is a phase-locked estimate rather than the raw edge time, so one
    * late or early sample (frame quantization, a dropped frame) doesn't shift the next decision.
    *
-   * Measured in simulation (seeds 1–1000, 'Hello, FlashLink! 👋', ±8 ms jitter, 1% frame drops):
-   * 96.4% decoded at 200 ms/bit and 30 fps; 97.4% at 100 ms/bit and 60 fps (±4 ms jitter).
+   * Measured through the Receiver with frame v2 (seeds 1–1000, 'Hello, FlashLink! 👋', 1% frame
+   * drops): 95.9% decoded at 200 ms/bit and 30 fps (±8 ms jitter, noise 0.05); 93.9% at 100 ms/bit
+   * and 60 fps (±4 ms jitter, noise 0.03). With frame v1 the same runs gave 94.8% and 95.4%.
    * Failures are lost lock, CRC rejections or no lock; none delivered wrong text.
    */
   private decode(edge: Edge): Bit[] {
