@@ -8,6 +8,12 @@ function post(entry: object): void {
   fetch(ENDPOINT, { method: 'POST', body: JSON.stringify(entry), keepalive: true }).catch(() => {});
 }
 
+/** Sends uncaught page errors to the log, so device-only failures can be read on the laptop. */
+export function reportPageErrors(): void {
+  window.addEventListener('error', (e) => post({ kind: 'page-error', message: e.message, stack: e.error?.stack }));
+  window.addEventListener('unhandledrejection', (e) => post({ kind: 'page-error', message: String(e.reason), stack: e.reason?.stack }));
+}
+
 const round = (v: number, digits = 3) => Number(v.toFixed(digits));
 
 /** One second of signal health, shown in the UI and logged in dev. */

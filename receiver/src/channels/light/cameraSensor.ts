@@ -22,6 +22,23 @@ type ExposureCapabilities = MediaTrackCapabilities & {
   exposureTime?: { min: number; max: number };
 };
 
+const CONSTRAINTS: MediaStreamConstraints = {
+  audio: false,
+  // Small frames are plenty for a 48-pixel tracking grid, and let many cameras run faster.
+  video: { facingMode: { ideal: 'environment' }, width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 60 } },
+};
+
+/** Opens the camera, retrying once: Windows webcams are often briefly busy right after a stop. */
+async function openCamera(): Promise<MediaStream> {
+  try {
+    return await navigator.mediaDevices.getUserMedia(CONSTRAINTS);
+  } catch (err) {
+    if (!(err instanceof DOMException && err.name === 'NotReadableError')) throw err;
+    await new Promise((r) => setTimeout(r, 800));
+    return navigator.mediaDevices.getUserMedia(CONSTRAINTS);
+  }
+}
+
 /** Best effort: switch to a short manual exposure where the camera allows it. */
 async function shortenExposure(track: MediaStreamTrack): Promise<string> {
   const caps = track.getCapabilities?.() as ExposureCapabilities | undefined;
@@ -53,11 +70,7 @@ export class CameraLightSensor implements Sensor {
 
   async start(onSample: (t: number, level: number) => void): Promise<void> {
     this.stopped = false;
-    this.stream = await navigator.mediaDevices.getUserMedia({
-      audio: false,
-      // Small frames are plenty for a 48-pixel tracking grid, and let many cameras run faster.
-      video: { facingMode: { ideal: 'environment' }, width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 60 } },
-    });
+    this.stream = await openCamera();
     this.exposure = await shortenExposure(this.stream.getVideoTracks()[0]);
     const video = this.video as VideoWithRvfc;
     video.srcObject = this.stream;
@@ -70,6 +83,17 @@ export class CameraLightSensor implements Sensor {
     let lastRegion = '';
     const onFrame = (now: number, meta: FrameMeta) => {
       if (this.stopped) return;
+      // Schedule the next frame first, so an error in this one can't stop the loop.
+      this.handle = video.requestVideoFrameCallback(onFrame);
+      try {
+        readFrame(now, meta);
+      } catch (err) {
+        queueMicrotask(() => {
+          throw err; // surfaces in window 'error' handlers and the console
+        });
+      }
+    };
+    const readFrame = (now: number, meta: FrameMeta) => {
       const gw = GRID_WIDTH;
       const gh = Math.max(1, Math.round((GRID_WIDTH * video.videoHeight) / video.videoWidth));
       if (!this.tracker || this.tracker.height !== gh) {
@@ -93,7 +117,6 @@ export class CameraLightSensor implements Sensor {
         this.onRegion?.(region);
       }
       onSample(t, level);
-      this.handle = video.requestVideoFrameCallback(onFrame);
     };
     this.handle = video.requestVideoFrameCallback(onFrame);
   }

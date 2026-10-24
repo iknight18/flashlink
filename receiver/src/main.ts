@@ -1,7 +1,7 @@
 import { Receiver, type ReceiverEvent, type ReceiverState } from '@flashlink/protocol';
 import { channels } from './channels/registry';
 import type { Region, Sensor } from './channels/types';
-import { Diagnostics, type SignalStats } from './diagnostics';
+import { Diagnostics, reportPageErrors, type SignalStats } from './diagnostics';
 import { Graph } from './ui/graph';
 import { Histogram } from './ui/histogram';
 import { icon } from './ui/icons';
@@ -250,6 +250,7 @@ async function start(): Promise<void> {
     else if (err instanceof DOMException && err.name === 'NotReadableError')
       showError('The camera is busy. Another tab or app is using it, often an older FlashLink tab. Close it, then press Start again.');
     else showError(`Could not start the camera: ${(err as Error).message}`);
+    diag.sensor({ failed: err instanceof DOMException ? err.name : 'Error', message: (err as Error).message });
   } finally {
     startBtn.disabled = false;
   }
@@ -270,6 +271,7 @@ function stop(): void {
   setStartButton(false);
 }
 
+reportPageErrors();
 setState('IDLE');
 setStartButton(false);
 startBtn.addEventListener('click', () => (sensor ? stop() : void start()));
