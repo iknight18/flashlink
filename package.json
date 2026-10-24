@@ -1,0 +1,10 @@
+{
+  "name": "flashlink",
+  "private": true,
+  "workspaces": ["protocol", "receiver", "emitter"],
+  "scripts": {
+    "test": "npm test -w protocol",
+    "receiver": "npm run dev -w receiver",
+    "emitter": "npm run start -w emitter"
+  }
+}
