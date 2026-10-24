@@ -6,3 +6,4 @@ export * from './signal/edgeDetector';
 export * from './modulation/manchester/decode';
 export * from './receiver';
 export * from './simulator/simulate';
+export * from './signal/scheduler';
