@@ -1,4 +1,5 @@
 import { FrameDecoder } from './framing/frame';
+import { decodePayload } from './framing/textCodec';
 import { ManchesterDecoder, type ManchesterDecoderOptions } from './modulation/manchester/decode';
 import { DutyCorrector, type DutyCorrectorOptions } from './signal/dutyCorrector';
 import { EdgeDetector, type EdgeDetectorOptions } from './signal/edgeDetector';
@@ -12,7 +13,7 @@ export type ReceiverEvent =
   /** `text` is the payload so far: streamed for display, not yet checked by the CRC. */
   | { type: 'progress'; received: number; length: number; text: string }
   | { type: 'message'; text: string }
-  | { type: 'error'; reason: 'crc'; bestGuess: string }
+  | { type: 'error'; reason: 'crc' }
   | { type: 'error'; reason: 'lost' };
 
 export interface ReceiverOptions {
@@ -72,13 +73,23 @@ export class Receiver {
         this.setState('READING', events);
         events.push({ type: 'progress', received: 0, length: ev.length, text: '' });
       } else if (ev.type === 'progress') {
-        events.push({ ...ev, text: this.frame.partialText });
+        const text = decodePayload(ev.bytes, ev.header.compressed, true);
+        events.push({ type: 'progress', received: ev.bytes.length, length: ev.length, text });
       } else if (ev.type === 'done') {
-        events.push({ type: 'message', text: ev.text });
+        let text: string;
+        try {
+          text = decodePayload(ev.bytes, ev.header.compressed);
+        } catch {
+          // Passed the CRC by chance but is not a valid payload.
+          events.push({ type: 'error', reason: 'crc' });
+          this.finish('HUNTING', events);
+          break;
+        }
+        events.push({ type: 'message', text });
         this.finish('DONE', events);
         break;
       } else {
-        events.push({ type: 'error', reason: 'crc', bestGuess: ev.bestGuess });
+        events.push({ type: 'error', reason: 'crc' });
         this.finish('HUNTING', events);
         break;
       }

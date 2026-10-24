@@ -147,7 +147,7 @@ describe('Receiver keeps listening', () => {
 
   it('goes straight back to searching after a checksum failure', () => {
     const bits = encodeFrame('Hello');
-    const i = 16 + 16 + 7; // last bit of the first payload byte
+    const i = 16 + 16 + 8 + 7; // sync + header + length → last bit of the first payload byte
     bits[i] = bits[i] === 1 ? 0 : 1;
     const rx = new Receiver();
     const evs = simulate(manchesterEncode(bits, 200), { fps: 30 }).flatMap((s) => rx.push(s.t, s.level));
@@ -171,7 +171,7 @@ describe('Receiver regressions', () => {
 
   it('reports lost signal (not stuck) when the length byte MSB is corrupted', () => {
     const bits = encodeFrame('short');
-    bits[24] = bits[24] === 1 ? 0 : 1; // preamble 16 + sync 8 → MSB of the length byte
+    bits[32] = bits[32] === 1 ? 0 : 1; // sync 16 + header 16 → MSB of the length byte
     const rx = new Receiver();
     const evs = simulate(manchesterEncode(bits, 200), { fps: 30 }).flatMap((s) => rx.push(s.t, s.level));
     expect(evs).toContainEqual({ type: 'error', reason: 'lost' });

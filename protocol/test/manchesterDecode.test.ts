@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ManchesterDecoder } from '../src/modulation/manchester/decode';
-import { manchesterEncode, type TimedLevels } from '../src/modulation/manchester/encode';
+import { MANCHESTER_PREAMBLE_BITS, manchesterEncode, type TimedLevels } from '../src/modulation/manchester/encode';
 import { encodeFrame } from '../src/framing/frame';
 import type { Bit } from '../src/framing/bits';
 import type { Edge } from '../src/signal/edgeDetector';
@@ -23,8 +23,10 @@ describe('ManchesterDecoder', () => {
     const out: Bit[] = [];
     for (const e of edgesOf(manchesterEncode(bits, 200))) out.push(...dec.pushEdge(e));
     expect(dec.state).toBe('LOCKED');
-    expect(out.length).toBeGreaterThan(bits.length - 16);
-    expect(out).toEqual(bits.slice(bits.length - out.length));
+    // The encoder prepends the preamble; lock happens inside it.
+    const sent = [...Array.from({ length: MANCHESTER_PREAMBLE_BITS }, (_, i) => (i % 2 === 0 ? 1 : 0)), ...bits];
+    expect(out.length).toBeGreaterThan(bits.length);
+    expect(out).toEqual(sent.slice(sent.length - out.length));
   });
 
   it('drops back to HUNTING on an impossible interval', () => {
