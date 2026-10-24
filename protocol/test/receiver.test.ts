@@ -56,3 +56,24 @@ describe('Receiver end-to-end (simulated camera)', () => {
     expect(evs.some((e) => e.type === 'interval')).toBe(true);
   });
 });
+
+describe('Receiver robustness sweeps', () => {
+  const text = 'Hello, FlashLink! 👋';
+  const sweep = (bitMs: number, sim: Omit<SimOptions, 'seed'>) => {
+    const failed: number[] = [];
+    for (let seed = 1; seed <= 100; seed++) {
+      if (messages(transmit(text, bitMs, { ...sim, seed }))[0] !== text) failed.push(seed);
+    }
+    return failed;
+  };
+
+  it('decodes every seed at 200 ms/bit, 30 fps with jitter, noise and dropped frames', () => {
+    const failed = sweep(200, { fps: 30, jitterMs: 8, noise: 0.05, dropRate: 0.01 });
+    expect(100 - failed.length, `failed seeds: ${failed.join(', ')}`).toBe(100);
+  });
+
+  it('decodes every seed at 100 ms/bit, 60 fps with jitter, noise and dropped frames', () => {
+    const failed = sweep(100, { fps: 60, jitterMs: 4, noise: 0.03, dropRate: 0.01 });
+    expect(100 - failed.length, `failed seeds: ${failed.join(', ')}`).toBe(100);
+  });
+});

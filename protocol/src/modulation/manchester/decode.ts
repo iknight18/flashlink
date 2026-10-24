@@ -10,6 +10,11 @@ export interface ManchesterDecoderOptions {
   tolerance?: number;
 }
 
+/** Fraction of a mid-edge timing error applied to the phase reference. */
+const PHASE_GAIN = 0.3;
+/** Fraction of a mid-edge timing error applied to the bit period estimate. */
+const PERIOD_GAIN = 0.05;
+
 /** A mid-bit edge going high→low is a 1, low→high is a 0. */
 const bitFromEdge = (e: Edge): Bit => (e.level === 0 ? 1 : 0);
 
@@ -30,8 +35,10 @@ export class ManchesterDecoder {
 
   private lastEdge: Edge | null = null;
   private intervals: number[] = [];
-  private phase: 'mid' | 'boundary' = 'mid';
-  private pendingShort = 0;
+  /** Filtered estimate of the last mid-bit edge's time; every bit is timed from here. */
+  private midT = 0;
+  /** A boundary edge has already been seen since the last mid-bit edge. */
+  private sawBoundary = false;
   private readonly lockCount: number;
   private readonly tolerance: number;
 
@@ -44,8 +51,7 @@ export class ManchesterDecoder {
     const prev = this.lastEdge;
     this.lastEdge = edge;
     if (!prev) return [];
-    const dt = edge.t - prev.t;
-    return this.state === 'HUNTING' ? this.hunt(dt, edge) : this.decode(dt, edge);
+    return this.state === 'HUNTING' ? this.hunt(edge.t - prev.t, edge) : this.decode(edge);
   }
 
   /** Call on every sample without an edge; returns true if lock was just lost. */
@@ -61,8 +67,8 @@ export class ManchesterDecoder {
     this.state = 'HUNTING';
     this.bitMs = 0;
     this.intervals = [];
-    this.phase = 'mid';
-    this.pendingShort = 0;
+    this.midT = 0;
+    this.sawBoundary = false;
   }
 
   private hunt(dt: number, edge: Edge): Bit[] {
@@ -74,33 +80,36 @@ export class ManchesterDecoder {
     this.state = 'LOCKED';
     this.bitMs = m;
     this.intervals = [];
-    this.phase = 'mid';
+    this.midT = edge.t;
+    this.sawBoundary = false;
     return [bitFromEdge(edge)];
   }
 
-  private decode(dt: number, edge: Edge): Bit[] {
-    const ratio = dt / this.bitMs;
-    if (ratio < 0.75) {
-      // short: half a bit
-      if (this.phase === 'mid') {
-        this.phase = 'boundary';
-        this.pendingShort = dt;
+  /**
+   * Classifies each edge by time since the last mid-bit edge: boundary (< ¾T) or mid (¾T–1½T).
+   * The mid-edge reference is a phase-locked estimate rather than the raw edge time, so one
+   * late or early sample (frame quantization, a dropped frame) doesn't shift the next decision.
+   */
+  private decode(edge: Edge): Bit[] {
+    const elapsed = edge.t - this.midT;
+    const ratio = elapsed / this.bitMs;
+    // Two boundary edges can't be adjacent, so after one the mid edge may arrive as early as ½T.
+    const midFrom = this.sawBoundary ? 0.5 : 0.75;
+    if (ratio < midFrom) {
+      // boundary edge between two equal bits: carries no data
+      if (!this.sawBoundary) {
+        this.sawBoundary = true;
         return [];
       }
-      this.adapt(this.pendingShort + dt);
-      this.phase = 'mid';
-      return [bitFromEdge(edge)];
-    }
-    if (ratio < 1.5 && this.phase === 'mid') {
-      // long: a full bit, mid-edge to mid-edge
-      this.adapt(dt);
+    } else if (ratio < 1.5) {
+      // mid-bit edge, expected one period after the last one
+      const err = elapsed - this.bitMs;
+      this.midT += this.bitMs + PHASE_GAIN * err;
+      this.bitMs += PERIOD_GAIN * err;
+      this.sawBoundary = false;
       return [bitFromEdge(edge)];
     }
     this.reset();
     return [];
-  }
-
-  private adapt(period: number): void {
-    this.bitMs = 0.8 * this.bitMs + 0.2 * period;
   }
 }
