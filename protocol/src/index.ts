@@ -7,6 +7,8 @@ export * from './modulation/manchester/encode';
 export * from './signal/edgeDetector';
 export * from './signal/dutyCorrector';
 export * from './modulation/manchester/decode';
+export * from './modulation/pulse/encode';
+export * from './modulation/pulse/decode';
 export * from './receiver';
 export * from './simulator/simulate';
 export * from './signal/scheduler';
