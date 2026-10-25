@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { buildTransmission, MultiReceiver, simulateLanes } from '@flashlink/protocol';
 import { LightFinder } from '../src/channels/light/lightFinder';
+import { exposureRamp, laptop, paintScene, type Rect, shake } from './scene';
 
 const W = 96;
 const H = 72;
 const FRAME_MS = 1000 / 30;
 const SLOT_MS = 100;
+const FRAME60_MS = 1000 / 60;
 
 /** Small seeded PRNG (mulberry32) so the synthetic scenes are reproducible. */
 function rng(seed: number): () => number {
@@ -79,8 +81,8 @@ describe('LightFinder', () => {
       { x: 10, y: 50, size: 8, on: blinking(3) },
       { x: 70, y: 50, size: 8, on: blinking(4) },
     ];
-    const frames = run(new LightFinder(W, H), 4000, () => tiles, { noise: 0.01, r: rng(9) });
-    const settled = frames.filter((f) => f.t >= 1000);
+    const frames = run(new LightFinder(W, H), 4500, () => tiles, { noise: 0.01, r: rng(9) });
+    const settled = frames.filter((f) => f.t >= 1500);
     const first = ids(settled[0].sources);
     expect(first).toHaveLength(4);
     for (const f of settled) expect(ids(f.sources)).toEqual(first);
@@ -100,7 +102,7 @@ describe('LightFinder', () => {
 
     const torch: Tile = { x: 5, y: 5, size: 4, on: blinking(5) };
     const both = run(new LightFinder(W, H), 3000, () => [lamp, torch], { noise: 0.01, r: rng(4) });
-    for (const f of both.filter((f) => f.t >= 500)) {
+    for (const f of both.filter((f) => f.t >= 1500)) {
       expect(f.sources).toHaveLength(1);
       expect(f.sources[0].cx).toBeLessThan(0.15);
     }
@@ -114,7 +116,7 @@ describe('LightFinder', () => {
   it('keeps a 2×2 tile at 100 ms slots at a contrast of at least 0.4', () => {
     const tile: Tile = { x: 47, y: 33, size: 2, on: blinking(7) };
     const frames = run(new LightFinder(W, H), 4000, () => [tile], { noise: 0.01, r: rng(8) });
-    const levels = frames.filter((f) => f.t >= 500).map((f) => {
+    const levels = frames.filter((f) => f.t >= 1500).map((f) => {
       expect(f.sources).toHaveLength(1);
       return f.sources[0].level;
     });
@@ -125,8 +127,8 @@ describe('LightFinder', () => {
     for (const [w, h] of [[96, 72], [96, 128]]) {
       for (const [fx, fy] of [[0.02, 0.03], [0.5, 0.5], [0.95, 0.94]]) {
         const torch: Tile = { x: Math.floor(fx * (w - 3)), y: Math.floor(fy * (h - 3)), size: 3, on: blinking(11) };
-        const frames = run(new LightFinder(w, h), 3000, () => [torch], { w, h, noise: 0.01, r: rng(12) });
-        const levels = frames.filter((f) => f.t >= 300).map((f) => {
+        const frames = run(new LightFinder(w, h), 3500, () => [torch], { w, h, noise: 0.01, r: rng(12) });
+        const levels = frames.filter((f) => f.t >= 1500).map((f) => {
           expect(f.sources).toHaveLength(1);
           return f.sources[0].level;
         });
@@ -137,10 +139,16 @@ describe('LightFinder', () => {
 
   it('keeps the id of a slowly drifting tile', () => {
     const on = blinking(13);
-    // 6 cells per second, 36 cells in total.
-    const tile = (t: number): Tile[] => [{ x: 10 + (t / 1000) * 6, y: 30 + (t / 1000) * 2, size: 5, on }];
-    const frames = run(new LightFinder(W, H), 6000, tile, { noise: 0.01, r: rng(14) });
-    const settled = frames.filter((f) => f.t >= 300);
+    const finder = new LightFinder(W, H);
+    const r = rng(14);
+    const frames: { t: number; sources: Source[] }[] = [];
+    // 6 cells per second, 36 cells in total, imaged as a camera would: at its sub-cell
+    // position with soft edges (whole-cell jumps of a hard-edged tile never happen).
+    for (let t = 0; t < 6000; t += FRAME_MS) {
+      const tile: Rect = { x: 10 + (t / 1000) * 6, y: 30 + (t / 1000) * 2, w: 5, h: 5, value: on(Math.floor(t / SLOT_MS)) ? 0.9 : 0.05 };
+      frames.push({ t, sources: finder.push(t, paintScene(W, H, [tile], { soft: true, noise: 0.01, rand: r })) });
+    }
+    const settled = frames.filter((f) => f.t >= 1500);
     const id = settled[0].sources[0].id;
     for (const f of settled) {
       expect(f.sources.map((s) => s.id)).toEqual([id]);
@@ -154,17 +162,17 @@ describe('LightFinder', () => {
       { x: 38, y: 30, size: 5, on: blinking(16) },
     ];
     const frames = run(new LightFinder(W, H), 3000, () => tiles, { noise: 0.01, r: rng(17) });
-    for (const f of frames.filter((f) => f.t >= 1000)) expect(f.sources).toHaveLength(2);
+    for (const f of frames.filter((f) => f.t >= 2000)) expect(f.sources).toHaveLength(2);
   });
 
-  it('holds a light that drops out of the activity map for ~0.5 s, still reading its level, then drops it', () => {
-    const weak: Tile = { x: 10, y: 10, size: 6, value: 0.2, on: blinking(18) };
+  it('holds a light that drops out of the swing map for ~1.5 s, still reading its level, then drops it', () => {
+    const weak: Tile = { x: 10, y: 10, size: 6, value: 0.3, on: blinking(18) };
     const strongOn = blinking(19);
     // A much stronger light appears at 2 s, so the weak one falls under the relative threshold.
-    const strong: Tile = { x: 70, y: 50, size: 6, value: 1, on: (slot) => slot >= 20 && strongOn(slot) };
-    const finder = new LightFinder(W, H, { relThreshold: 0.2 });
-    const frames = run(finder, 4000, () => [weak, strong], { noise: 0.005, r: rng(20) });
-    const before = frames.filter((f) => f.t >= 1000 && f.t < 2000);
+    const strong: Tile = { x: 70, y: 40, size: 12, value: 1, on: (slot) => slot >= 20 && strongOn(slot) };
+    const finder = new LightFinder(W, H);
+    const frames = run(finder, 6000, () => [weak, strong], { noise: 0.005, r: rng(20) });
+    const before = frames.filter((f) => f.t >= 1500 && f.t < 2000);
     const weakId = before[0].sources[0].id;
     for (const f of before) expect(ids(f.sources)).toEqual([weakId]);
 
@@ -172,7 +180,7 @@ describe('LightFinder', () => {
     const after = frames.filter((f) => f.t >= 2000);
     const lastSeen = after.filter((f) => f.sources.some((s) => s.id === weakId)).at(-1)!;
     const goneAt = after.find((f) => f.t > lastSeen.t)?.t ?? Infinity;
-    expect(goneAt).toBeLessThan(4000);
+    expect(goneAt).toBeLessThan(6000);
     // While held, its position stays put and its level still follows the tile.
     const held = after.filter((f) => f.t <= lastSeen.t).map((f) => f.sources.find((s) => s.id === weakId)!);
     for (const s of held) {
@@ -182,33 +190,144 @@ describe('LightFinder', () => {
     const heldLevels = held.slice(-12).map((s) => s.level);
     expect(Math.max(...heldLevels) - Math.min(...heldLevels)).toBeGreaterThan(0.1);
 
-    // Without holding it would have gone about 0.5 s earlier.
-    const noHold = run(new LightFinder(W, H, { relThreshold: 0.2, holdMs: 0 }), 4000, () => [weak, strong], { noise: 0.005, r: rng(20) });
+    // Without holding it would have gone about 1.5 s earlier.
+    const noHold = run(new LightFinder(W, H, { holdMs: 0 }), 6000, () => [weak, strong], { noise: 0.005, r: rng(20) });
     const nearWeak = (s: Source) => s.cx < 0.5 && s.cy < 0.5;
     const goneNoHold = noHold.find((f) => f.t >= 2000 && !f.sources.some(nearWeak))!.t;
     expect(after.find((f) => f.t >= 2000 && !f.sources.some(nearWeak))!.t).toBe(goneAt);
-    expect(goneAt - goneNoHold).toBeGreaterThan(400);
-    expect(goneAt - goneNoHold).toBeLessThan(600);
+    expect(goneAt - goneNoHold).toBeGreaterThan(1400);
+    expect(goneAt - goneNoHold).toBeLessThan(1600);
   });
 
   it('holds a light hidden for a few frames under the same id', () => {
     const on = blinking(21);
     // The tile jumps out of the picture for 200 ms and comes back.
-    const tile = (t: number): Tile[] => [{ x: t >= 1500 && t < 1700 ? -100 : 40, y: 30, size: 5, on }];
+    const tile = (t: number): Tile[] => [{ x: t >= 2500 && t < 2700 ? -100 : 40, y: 30, size: 5, on }];
     const finder = new LightFinder(W, H, { tauMs: 300 });
-    const frames = run(finder, 3000, tile, { noise: 0.01, r: rng(22) });
-    const settled = frames.filter((f) => f.t >= 1000);
+    const frames = run(finder, 4000, tile, { noise: 0.01, r: rng(22) });
+    const settled = frames.filter((f) => f.t >= 1500);
     const id = settled[0].sources[0].id;
     for (const f of settled) expect(f.sources.map((s) => s.id)).toEqual([id]);
   });
 
   it('numbers sources from 1 and reuses a freed number', () => {
     const on = blinking(23);
-    const a = (t: number): Tile[] => (t < 1000 ? [{ x: 10, y: 10, size: 5, on }] : t > 3000 ? [{ x: 70, y: 40, size: 5, on }] : []);
+    const a = (t: number): Tile[] => (t < 2000 ? [{ x: 10, y: 10, size: 5, on }] : t > 4500 ? [{ x: 70, y: 40, size: 5, on }] : []);
     const finder = new LightFinder(W, H, { tauMs: 150 });
-    const frames = run(finder, 4000, a, { noise: 0.01, r: rng(24) });
+    const frames = run(finder, 6500, a, { noise: 0.01, r: rng(24) });
     expect(frames.find((f) => f.sources.length)!.sources[0].id).toBe(1);
     expect(frames.at(-1)!.sources.map((s) => s.id)).toEqual([1]);
+  });
+});
+
+describe('LightFinder on a hand-held phone (60 fps)', () => {
+  /** Tiles at 0.9 when on and the screen's black when off. */
+  const tileRects = (t: number, tiles: { x: number; y: number; size: number; on: (slot: number) => boolean }[]): Rect[] =>
+    tiles.map(({ x, y, size, on }) => ({ x, y, w: size, h: size, value: on(Math.floor(t / SLOT_MS)) ? 0.9 : 0.05 }));
+
+  it('sees a soft-edged, noisy 14×14 tile as exactly one light', () => {
+    const tiles = [{ x: 40, y: 28, size: 14, on: blinking(31) }];
+    const finder = new LightFinder(W, H);
+    const r = rng(32);
+    const seen = new Set<number>();
+    for (let t = 0; t < 4000; t += FRAME60_MS) {
+      const s = finder.push(t, paintScene(W, H, tileRects(t, tiles), { soft: true, noise: 0.05, rand: r }));
+      if (t < 1500) continue;
+      expect(s).toHaveLength(1);
+      seen.add(s[0].id);
+    }
+    expect(seen.size).toBe(1);
+  });
+
+  const layouts: [string, { x: number; y: number; size: number }[]][] = [
+    ['1 tile', [{ x: 41, y: 29, size: 14 }]],
+    ['4 tiles', [{ x: 22, y: 14, size: 14 }, { x: 60, y: 14, size: 14 }, { x: 22, y: 42, size: 14 }, { x: 60, y: 42, size: 14 }]],
+  ];
+
+  it.each(layouts)('ignores a shaking laptop bezel and exposure settling, and keeps %s with stable ids', (_, layout) => {
+    const tiles = layout.map((p, k) => ({ ...p, on: blinking(40 + k) }));
+    const finder = new LightFinder(W, H);
+    const r = rng(41);
+    const first = new Map<number, Source>();
+    for (let t = 0; t < 6000; t += FRAME60_MS) {
+      const frame = paintScene(W, H, [...laptop(W, H), ...tileRects(t, tiles)], { bg: 0.2, soft: true, noise: 0.02, rand: r, gain: exposureRamp(t), ...shake(t) });
+      const s = finder.push(t, frame);
+      if (t < 1500) continue;
+      expect(s).toHaveLength(tiles.length);
+      if (first.size === 0) for (const x of s) first.set(x.id, x);
+      expect(ids(s)).toEqual([...first.keys()].sort((a, b) => a - b));
+      for (const x of s) {
+        expect(Math.abs(x.cx - first.get(x.id)!.cx)).toBeLessThan(0.03);
+        expect(Math.abs(x.cy - first.get(x.id)!.cy)).toBeLessThan(0.03);
+      }
+    }
+  });
+
+  it.each([false, true])('emits a square level: one midpoint crossing per transition, on its frame (shake: %s)', (shaking) => {
+    const signal = buildTransmission('Square wave', { lanes: 1, coding: 'pulse', slotMs: 100, msgId: 1 });
+    const frames = simulateLanes(signal, { fps: 60, seed: 5, leadInMs: 600, tailMs: 400 });
+    const finder = new LightFinder(W, H);
+    const r = rng(51);
+    const levels: number[] = [];
+    const truth: boolean[] = [];
+    for (const { t, levels: [lv] } of frames) {
+      const tile: Rect = { x: 40, y: 28, w: 14, h: 14, value: lv > 0.5 ? 0.9 : 0.05 };
+      const s = finder.push(t, paintScene(W, H, [tile], { soft: true, noise: 0.05, rand: r, ...(shaking ? shake(t) : {}) }));
+      // From 0.6 s after the light starts blinking.
+      if (t < 1200) continue;
+      expect(s).toHaveLength(1);
+      levels.push(s[0].level);
+      truth.push(lv > 0.5);
+    }
+    const mid = (Math.min(...levels) + Math.max(...levels)) / 2;
+    const flips = (xs: boolean[]) => xs.flatMap((x, i) => (i > 0 && x !== xs[i - 1] ? [i] : []));
+    const expected = flips(truth);
+    expect(expected.length).toBeGreaterThan(20);
+    expect(flips(levels.map((l) => l > mid))).toEqual(expected);
+  });
+});
+
+describe('LightFinder only reports lights that blink repeatedly', () => {
+  const soft = (r: () => number, more: Partial<Parameters<typeof paintScene>[3]> = {}) => ({ soft: true, noise: 0.02, rand: r, ...more });
+
+  it('reports no source for a steady bright lamp', () => {
+    const finder = new LightFinder(W, H);
+    const r = rng(61);
+    for (let t = 0; t < 4000; t += FRAME60_MS)
+      expect(finder.push(t, paintScene(W, H, [{ x: 40, y: 28, w: 14, h: 14, value: 0.95 }], soft(r)))).toEqual([]);
+  });
+
+  it('reports no source for a light switched on once and left on', () => {
+    const finder = new LightFinder(W, H);
+    const r = rng(62);
+    for (let t = 0; t < 4000; t += FRAME60_MS) {
+      const tile: Rect = { x: 40, y: 28, w: 14, h: 14, value: t >= 1000 ? 0.9 : 0.05 };
+      expect(finder.push(t, paintScene(W, H, [tile], soft(r)))).toEqual([]);
+    }
+  });
+
+  it('reports no source when the screen edge moves once by 2 cells', () => {
+    const finder = new LightFinder(W, H);
+    const r = rng(63);
+    for (let t = 0; t < 4000; t += FRAME60_MS) {
+      // The hand jerks the phone 2 cells sideways and down at 1 s, over 50 ms, and holds still.
+      const k = Math.min(1, Math.max(0, (t - 1000) / 50));
+      expect(finder.push(t, paintScene(W, H, laptop(W, H), soft(r, { bg: 0.2, dx: 2 * k, dy: 2 * k })))).toEqual([]);
+    }
+  });
+
+  it('reports a blinking tile within ~0.5 s of it starting to blink', () => {
+    const signal = buildTransmission('Hello', { lanes: 1, coding: 'pulse', slotMs: 100, msgId: 2 });
+    const frames = simulateLanes(signal, { fps: 60, seed: 3, leadInMs: 1000, tailMs: 0 });
+    const finder = new LightFinder(W, H);
+    const r = rng(64);
+    let found = Infinity;
+    for (const { t, levels: [lv] } of frames) {
+      const s = finder.push(t, paintScene(W, H, [{ x: 40, y: 28, w: 14, h: 14, value: lv > 0.5 ? 0.9 : 0.05 }], soft(r)));
+      if (t < 1000) expect(s).toEqual([]);
+      else if (s.length === 1 && found === Infinity) found = t;
+    }
+    expect(found - 1000).toBeLessThanOrEqual(550);
   });
 });
 
