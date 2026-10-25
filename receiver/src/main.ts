@@ -3,10 +3,11 @@ import { channels } from './channels/registry';
 import type { Sensor, SensorSource } from './channels/types';
 import { Diagnostics, reportPageErrors, type SignalStats } from './diagnostics';
 import { Feed, type FeedRow } from './feed';
-import { bestState, EdgeIntervals, type OverallState } from './sources';
+import { bestState, EdgeIntervals, liveLanes, type OverallState } from './sources';
 import { Graph } from './ui/graph';
 import { Histogram } from './ui/histogram';
 import { icon } from './ui/icons';
+import { Markers } from './ui/markers';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const select = $<HTMLSelectElement>('channel');
@@ -30,6 +31,9 @@ $('empty-icon').innerHTML = icon('cameraSlash', 22);
 
 const graph = new Graph($<HTMLCanvasElement>('graph'));
 const histogram = new Histogram($<HTMLCanvasElement>('histogram'));
+const markers = new Markers($<HTMLDivElement>('markers'));
+/** Lane each source last carried (from its latest frame header), for its marker. */
+const laneOf = new Map<number, number>();
 
 for (const c of channels) select.add(new Option(c.label, c.id));
 
@@ -171,6 +175,7 @@ function handle(e: MultiEvent): void {
   switch (e.type) {
     case 'sources':
       sourceStates = new Map(e.sources.map((s) => [s.id, s.state]));
+      for (const id of laneOf.keys()) if (!sourceStates.has(id)) laneOf.delete(id);
       refreshState();
       if (feed.sources(anyReading())) showFailed();
       break;
@@ -232,6 +237,8 @@ async function start(): Promise<void> {
           diag.interval(ms);
         }
       }
+      for (const [id, lane] of liveLanes(rx)) laneOf.set(id, lane);
+      markers.update(sources, sourceStates, laneOf);
       const g = graphSource(sources);
       if (g) graph.push(t, g.level, rx.receiver(g.id)?.threshold ?? null);
       diag.sample(t, sources, info);
@@ -264,6 +271,8 @@ function stop(): void {
   sensor?.stop();
   sensor = null;
   feed.reset();
+  markers.clear();
+  laneOf.clear();
   sourceStates = new Map();
   strongestId = null;
   doneUntil = 0;

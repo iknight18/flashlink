@@ -204,6 +204,31 @@ video { display: block; width: 100%; height: auto; }
 .pill[data-state='DONE'] .dot { background: var(--text); }
 .pill[data-state='ERROR'] .dot { background: var(--danger); }
 
+/* Numbered ring over every tracked light (display only, moved with transform). */
+.markers { position: absolute; inset: 0; pointer-events: none; }
+.viewport[data-camera='off'] .markers { display: none; }
+.marker {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  margin: -15px 0 0 -15px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  font: 600 12px/1 var(--mono);
+  color: #8d8d96;
+  background: rgba(14, 14, 16, 0.45);
+  will-change: transform;
+  transition: transform 0.12s linear, color 0.2s;
+}
+.marker:not([data-lane]) { font-weight: 400; font-size: 10px; }
+.marker[data-state='LOCKED'],
+.marker[data-state='DONE'] { color: #ececef; }
+.marker[data-state='READING'] { color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+
 /* ---------- Signal meter ---------- */
 
 .meter { margin: 16px 0 0; }
