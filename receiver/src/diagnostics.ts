@@ -1,4 +1,5 @@
-import type { ReceiverEvent } from '@flashlink/protocol';
+import type { MultiEvent, ReceiverState } from '@flashlink/protocol';
+import { bestState } from './sources';
 
 const ENDPOINT = '/__flashlink/log';
 
@@ -15,16 +16,46 @@ export function reportPageErrors(): void {
 
 const round = (v: number, digits = 3) => Number(v.toFixed(digits));
 
-/** One second of signal health, shown in the UI and logged in dev. */
-export interface SignalStats {
-  state: string;
-  fps: number;
+/** What the decoder of one source reports (see MultiReceiver.receiver). */
+export interface SourceInfo {
+  state: ReceiverState;
+  threshold: number | null;
+  skew: number;
+}
+
+/** One second of one light. */
+export interface SourceStats {
+  id: number;
   level: [number, number];
   contrast: number;
+  state: ReceiverState | 'GONE';
   threshold: number | null;
   /** Measured transmitter turn-on delay being corrected (ms). */
   skew: number;
+}
+
+/** One second of signal health, shown in the UI and logged in dev. */
+export interface SignalStats {
+  /** Best state over all lights (READING > LOCKED > HUNTING). */
+  state: string;
+  fps: number;
+  /** Lights seen in the last frame. */
+  lights: number;
+  sources: SourceStats[];
+  /** Id of the source with the highest contrast this second, if any. */
+  strongest: number | null;
+  /** Contrast, threshold and skew of the strongest source. */
+  contrast: number;
+  threshold: number | null;
+  skew: number;
+  /** Edge intervals of all sources. */
   edges: { n: number; min?: number; median?: number; max?: number };
+}
+
+interface Window {
+  min: number;
+  max: number;
+  info?: SourceInfo;
 }
 
 /**
@@ -34,12 +65,9 @@ export interface SignalStats {
  */
 export class Diagnostics {
   private frames = 0;
-  private min = Infinity;
-  private max = -Infinity;
-  private threshold: number | null = null;
-  private skew = 0;
+  private lights = 0;
+  private sources = new Map<number, Window>();
   private intervals: number[] = [];
-  private state = 'IDLE';
   private windowStart: number | null = null;
 
   constructor(private readonly onStats?: (stats: SignalStats) => void) {
@@ -51,36 +79,52 @@ export class Diagnostics {
     post({ kind: 'sensor', ...info });
   }
 
-  sample(t: number, level: number, threshold: number | null, skew = 0): void {
-    this.skew = skew;
+  /** One frame: every source's level, and its decoder's state for the summary. */
+  sample(t: number, sources: { id: number; level: number }[], info: (id: number) => SourceInfo | undefined): void {
     this.windowStart ??= t;
     this.frames++;
-    this.min = Math.min(this.min, level);
-    this.max = Math.max(this.max, level);
-    this.threshold = threshold;
+    this.lights = sources.length;
+    for (const { id, level } of sources) {
+      let w = this.sources.get(id);
+      if (!w) this.sources.set(id, (w = { min: Infinity, max: -Infinity }));
+      w.min = Math.min(w.min, level);
+      w.max = Math.max(w.max, level);
+      w.info = info(id);
+    }
     if (t - this.windowStart >= 1000) this.flush(t);
   }
 
-  event(e: ReceiverEvent): void {
-    if (e.type === 'interval') {
-      this.intervals.push(e.ms);
-      return;
-    }
-    if (e.type === 'state') this.state = e.state;
-    if (e.type === 'progress' && e.received !== 0) return; // header only
+  interval(ms: number): void {
+    this.intervals.push(ms);
+  }
+
+  event(e: MultiEvent): void {
     post({ kind: 'event', ...e });
   }
 
   private flush(t: number): void {
     const elapsed = t - this.windowStart!;
     const sorted = [...this.intervals].sort((a, b) => a - b);
+    const sources: SourceStats[] = [...this.sources.entries()]
+      .sort(([a], [b]) => a - b)
+      .map(([id, w]) => ({
+        id,
+        level: [round(w.min), round(w.max)],
+        contrast: round(w.max - w.min),
+        state: w.info?.state ?? 'GONE',
+        threshold: w.info?.threshold == null ? null : round(w.info.threshold),
+        skew: round(w.info?.skew ?? 0, 1),
+      }));
+    const strongest = sources.reduce<SourceStats | null>((b, s) => (!b || s.contrast > b.contrast ? s : b), null);
     const stats: SignalStats = {
-      state: this.state,
+      state: bestState(sources.flatMap((s) => (s.state === 'GONE' ? [] : [s.state]))),
       fps: round((this.frames * 1000) / elapsed, 1),
-      level: [round(this.min), round(this.max)],
-      contrast: round(this.max - this.min),
-      threshold: this.threshold === null ? null : round(this.threshold),
-      skew: round(this.skew, 1),
+      lights: this.lights,
+      sources,
+      strongest: strongest?.id ?? null,
+      contrast: strongest?.contrast ?? 0,
+      threshold: strongest?.threshold ?? null,
+      skew: strongest?.skew ?? 0,
       edges: sorted.length
         ? { n: sorted.length, min: Math.round(sorted[0]), median: Math.round(sorted[sorted.length >> 1]), max: Math.round(sorted[sorted.length - 1]) }
         : { n: 0 },
@@ -89,8 +133,7 @@ export class Diagnostics {
     post({ kind: 'stats', ...stats });
     this.windowStart = t;
     this.frames = 0;
-    this.min = Infinity;
-    this.max = -Infinity;
+    this.sources = new Map();
     this.intervals = [];
   }
 }
