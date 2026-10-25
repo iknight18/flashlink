@@ -35,7 +35,7 @@
             <div class="viewport-empty" id="empty">
               <span class="empty-icon" id="empty-icon"></span>
               <p class="empty-title">Camera is off</p>
-              <p class="empty-text">Start the receiver and point it at the sender's flashlight. The torch can be anywhere in the picture.</p>
+              <p class="empty-text">Start the receiver and point it at the sender's lights. They can be anywhere in the picture.</p>
             </div>
             <div class="viewport-skeleton" aria-hidden="true"></div>
             <div class="hud">
@@ -71,10 +71,12 @@
           </section>
 
           <dl class="stats">
+            <div><dt>Lights</dt><dd id="stat-lights">–</dd></div>
             <div><dt>Frame rate</dt><dd id="stat-fps">–</dd></div>
             <div><dt>Contrast</dt><dd id="stat-contrast">–</dd></div>
             <div><dt>Edge median</dt><dd id="stat-median">–</dd></div>
             <div><dt>Edge spread</dt><dd id="stat-spread">–</dd></div>
+            <div><dt>Turn-on skew</dt><dd id="stat-skew">–</dd></div>
           </dl>
           <p class="note" id="fps-hint" hidden></p>
 
