@@ -1,5 +1,5 @@
-import type { Sensor } from '../types';
-import { lightLevel } from './frameLevel';
+import type { Sensor, SensorSource } from '../types';
+import { LightFinder } from './lightFinder';
 
 type FrameMeta = { captureTime?: number; expectedDisplayTime: number };
 type VideoWithRvfc = HTMLVideoElement & {
@@ -52,7 +52,10 @@ async function shortenExposure(track: MediaStreamTrack): Promise<string> {
   }
 }
 
-/** Level of the light anywhere in the camera frame (see lightLevel); nothing is tracked. */
+/**
+ * Every blinking light in the camera frame, as separate sources (see LightFinder): the
+ * frame is downscaled to a 96-wide luma grid and the finder tracks the lights in it.
+ */
 export class CameraLightSensor implements Sensor {
   readonly id = 'light';
   readonly label = 'Light (camera)';
@@ -64,7 +67,7 @@ export class CameraLightSensor implements Sensor {
 
   constructor(private readonly video: HTMLVideoElement) {}
 
-  async start(onSample: (t: number, level: number) => void): Promise<void> {
+  async start(onSample: (t: number, sources: SensorSource[]) => void): Promise<void> {
     this.stopped = false;
     this.stream = await openCamera();
     this.exposure = await shortenExposure(this.stream.getVideoTracks()[0]);
@@ -76,6 +79,7 @@ export class CameraLightSensor implements Sensor {
 
     const ctx = this.canvas.getContext('2d', { willReadFrequently: true })!;
     let luma = new Float32Array(0);
+    let finder: LightFinder | null = null;
     const onFrame = (now: number, meta: FrameMeta) => {
       if (this.stopped) return;
       // Schedule the next frame first, so an error in this one can't stop the loop.
@@ -96,6 +100,7 @@ export class CameraLightSensor implements Sensor {
         this.canvas.width = gw;
         this.canvas.height = gh;
         luma = new Float32Array(gw * gh);
+        finder = new LightFinder(gw, gh);
       }
       ctx.drawImage(video, 0, 0, gw, gh);
       const px = ctx.getImageData(0, 0, gw, gh).data;
@@ -103,7 +108,7 @@ export class CameraLightSensor implements Sensor {
         luma[i] = (0.299 * px[i * 4] + 0.587 * px[i * 4 + 1] + 0.114 * px[i * 4 + 2]) / 255;
       }
       const t = meta.captureTime ?? meta.expectedDisplayTime ?? now;
-      onSample(t, lightLevel(luma));
+      onSample(t, finder!.push(t, luma));
     };
     this.handle = video.requestVideoFrameCallback(onFrame);
   }
