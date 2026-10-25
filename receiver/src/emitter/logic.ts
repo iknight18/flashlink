@@ -13,8 +13,8 @@ import {
 } from '@flashlink/protocol';
 
 export const MAX_BULBS = 9;
-/** Gap between tiles (and to the edge) as a fraction of the tile size; the spec asks ≥ 15%. */
-export const GAP_RATIO = 0.2;
+/** Gap between tiles (and to the edge) as a fraction of the tile size: wide enough that a hand-held receiver at ±1–1.5 cells of shake keeps 9 bulbs apart. */
+export const GAP_RATIO = 0.5;
 
 export interface Range {
   min: number;
