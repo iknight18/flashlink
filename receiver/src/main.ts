@@ -31,11 +31,28 @@ $('empty-icon').innerHTML = icon('cameraSlash', 22);
 
 const graph = new Graph($<HTMLCanvasElement>('graph'));
 const histogram = new Histogram($<HTMLCanvasElement>('histogram'));
-const markers = new Markers($<HTMLDivElement>('markers'));
+const markers = new Markers($<HTMLDivElement>('markers'), video);
 /** Lane each source last carried (from its latest frame header), for its marker. */
 const laneOf = new Map<number, number>();
 
 for (const c of channels) select.add(new Option(c.label, c.id));
+// Nothing to choose with one channel; it would only crowd the top bar on a phone.
+$('channel-field').hidden = channels.length < 2;
+
+/** Keeps the phone's screen on while receiving (best effort; iOS 16.4+). */
+let wakeLock: { release(): Promise<void> } | null = null;
+async function keepAwake(on: boolean): Promise<void> {
+  try {
+    if (on && !wakeLock) wakeLock = (await navigator.wakeLock?.request('screen')) ?? null;
+    else if (!on && wakeLock) {
+      const lock = wakeLock;
+      wakeLock = null;
+      await lock.release();
+    }
+  } catch {
+    wakeLock = null; // not supported, or refused (e.g. low battery)
+  }
+}
 
 type UiState = OverallState | 'DONE' | 'IDLE';
 
@@ -249,6 +266,7 @@ async function start(): Promise<void> {
     sourceStates = new Map();
     refreshState();
     setStartButton(true);
+    void keepAwake(true);
   } catch (err) {
     sensor?.stop();
     sensor = null;
@@ -281,6 +299,7 @@ function stop(): void {
   graph.clear();
   setState('IDLE');
   setStartButton(false);
+  void keepAwake(false);
 }
 
 reportPageErrors();

@@ -47,12 +47,14 @@ body {
   color: var(--text);
   font: 400 15px/1.5 var(--font);
   -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .app {
   max-width: 1280px;
   margin: 0 auto;
-  padding: max(16px, env(safe-area-inset-top)) 16px 32px;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+    max(32px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
 }
 
 /* ---------- Top bar ---------- */
@@ -78,7 +80,7 @@ body {
 .brand-name { font-weight: 600; letter-spacing: -0.02em; font-size: 17px; }
 .brand-role { color: var(--muted); font-size: 13px; padding-left: 10px; border-left: 1px solid var(--line); }
 
-.controls { display: flex; align-items: flex-end; gap: 10px; }
+.controls { display: flex; align-items: center; gap: 10px; }
 
 .field { display: grid; gap: 6px; }
 .field-inline { grid-auto-flow: column; align-items: center; gap: 8px; }
@@ -107,6 +109,8 @@ body {
 .btn:active { transform: scale(0.97); }
 .btn:disabled { opacity: 0.55; cursor: progress; }
 .btn-primary { background: var(--accent); color: var(--accent-ink); }
+.btn-ghost { background: transparent; color: var(--muted); border-color: var(--line); text-decoration: none; }
+.btn-ghost:hover { color: var(--text); }
 .btn-primary[data-running] { background: var(--surface-2); color: var(--text); border-color: var(--line); }
 .btn:focus-visible, .select:focus-visible, summary:focus-visible {
   outline: 2px solid var(--accent);
@@ -145,7 +149,7 @@ body {
   aspect-ratio: 4 / 3;
 }
 .viewport[data-camera='on'] { aspect-ratio: auto; }
-video { display: block; width: 100%; height: auto; }
+video { display: block; width: 100%; height: auto; object-fit: cover; }
 .viewport[data-camera='off'] video { display: none; }
 
 .viewport-empty {
@@ -244,6 +248,25 @@ video { display: block; width: 100%; height: auto; }
   border-radius: 14px;
   background: var(--surface);
   border: 1px solid var(--line);
+}
+
+/* Phones in portrait: a square camera crop, then status and messages, then the graph. */
+@media (max-width: 959px) {
+  .stage { display: contents; }
+  .viewport { order: 1; }
+  .panel { order: 2; }
+  .meter { order: 3; margin: 0; }
+}
+@media (max-width: 600px) {
+  .viewport, .viewport[data-camera='on'] { aspect-ratio: 1 / 1; }
+  .viewport video { height: 100%; }
+  .status-title { font-size: 20px; }
+  .feed-list { max-height: none; }
+}
+@media (max-width: 420px) {
+  .brand-role { display: none; }
+  .topbar { flex-wrap: nowrap; gap: 10px; }
+  .btn { padding: 10px 14px; }
 }
 
 /* ---------- Side panel ---------- */

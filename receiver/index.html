@@ -6,6 +6,14 @@
     <meta name="theme-color" content="#0e0e10" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#f6f6f7" media="(prefers-color-scheme: light)" />
     <title>FlashLink Receiver</title>
+    <!-- Home-screen web app (iPhone Safari: Share, Add to Home Screen). -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="FlashLink" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -20,7 +28,8 @@
           <span class="brand-role">Receiver</span>
         </div>
         <div class="controls">
-          <label class="field field-inline">
+          <a class="btn btn-ghost" href="/emitter.html" id="to-emitter">Send</a>
+          <label class="field field-inline" id="channel-field">
             <span class="field-label">Channel</span>
             <select id="channel" class="select"></select>
           </label>
