@@ -123,7 +123,7 @@ ui.repeat.addEventListener('click', () => {
 });
 
 ui.send.addEventListener('click', () => {
-  if (!plan.ok) return;
+  if (!plan.ok || sending) return; // check before burning a message id
   msgId = nextMsgId(msgId);
   // Rebuild with the new msgId; repeats inside this Send reuse it.
   const p = planMessage(settings.text, { lanes: settings.bulbs, coding: settings.coding, slotMs: settings.slotMs, msgId });
@@ -132,6 +132,7 @@ ui.send.addEventListener('click', () => {
 });
 
 ui.calibrate.addEventListener('click', () => {
+  if (sending) return;
   void play('calibrate', calibrationTransmission(settings.bulbs, settings.slotMs, settings.coding, CALIBRATE_MS), false);
 });
 
@@ -141,10 +142,16 @@ async function play(kind: 'send' | 'calibrate', signal: MultiTimedLevels, loop: 
   if (sending) return;
   const abort = new AbortController();
   sending = abort;
-  stage.onExit = () => abort.abort();
+  stage.onExit = () => {
+    abort.abort();
+    // The schedule notices within one slot; until then Send stays visibly blocked.
+    ui.send.disabled = ui.calibrate.disabled = true;
+    setStatus('Stopping…', '');
+  };
   stage.open(signal.lanes.length); // synchronous: still inside the click gesture
   const label = kind === 'send' ? `msg ${msgId}` : 'calibrate';
   let pass = 0;
+  let failure: unknown = null;
   try {
     do {
       pass++;
@@ -160,11 +167,16 @@ async function play(kind: 'send' | 'calibrate', signal: MultiTimedLevels, loop: 
         },
       });
     } while (loop && !abort.signal.aborted);
+  } catch (err) {
+    failure = err;
   } finally {
     stage.close();
     sending = null;
+    ui.calibrate.disabled = false;
+    update();
     const stopped = abort.signal.aborted;
-    if (kind === 'calibrate') setStatus(stopped ? 'Calibration stopped' : 'Calibration done', 'Send your message when the receiver shows a tight timing peak.');
+    if (failure !== null) setStatus('Send failed', failure instanceof Error ? failure.message : String(failure));
+    else if (kind === 'calibrate') setStatus(stopped ? 'Calibration stopped' : 'Calibration done', 'Send your message when the receiver shows a tight timing peak.');
     else
       setStatus(
         stopped ? `Stopped during pass ${pass}` : 'Sent',

@@ -51,7 +51,8 @@ export class SendStage {
       if (this.active && e.key === 'Escape') this.exit();
     });
     document.addEventListener('visibilitychange', () => {
-      if (this.active && document.visibilityState === 'visible') void this.acquireWakeLock();
+      // Hidden tabs get throttled timers (≥1 s), so the rest of the pass would be garbage.
+      if (this.active && document.visibilityState === 'hidden') this.exit();
     });
     window.addEventListener('resize', () => this.active && this.layout());
     el.addEventListener('pointermove', () => this.showCursor());
@@ -72,6 +73,9 @@ export class SendStage {
     this.active = true;
     this.wentFullscreen = false;
     this.el.hidden = false;
+    // Keep keys away from the page underneath (Enter/Space would re-trigger Send or flip settings).
+    document.querySelector('.app')?.setAttribute('inert', '');
+    this.el.querySelector<HTMLButtonElement>('#stage-stop')!.focus();
     document.documentElement.classList.add('is-sending');
     this.layout();
     this.showCursor();
@@ -103,6 +107,7 @@ export class SendStage {
     if (!this.active) return;
     this.active = false;
     this.el.hidden = true;
+    document.querySelector('.app')?.removeAttribute('inert');
     document.documentElement.classList.remove('is-sending');
     clearTimeout(this.cursorTimer);
     if (document.fullscreenElement === this.el) document.exitFullscreen().catch(() => {});
