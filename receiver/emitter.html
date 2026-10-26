@@ -66,6 +66,16 @@
             </div>
 
             <div class="em-setting">
+              <span class="em-label" id="brightness-label">Bulb brightness</span>
+              <div class="stepper" id="brightness" role="group" aria-labelledby="brightness-label">
+                <button class="stepper-btn" type="button" data-dir="-1" aria-label="Dimmer bulbs"></button>
+                <output class="stepper-value" aria-live="polite"><span data-value></span><small>%</small></output>
+                <button class="stepper-btn" type="button" data-dir="1" aria-label="Brighter bulbs"></button>
+              </div>
+              <span class="em-hint">Lower it if the receiver's bulbs bleed into each other or look washed out.</span>
+            </div>
+
+            <div class="em-setting">
               <span class="em-label" id="repeat-label">Repeat until stopped</span>
               <button class="switch" id="repeat" type="button" role="switch" aria-checked="true" aria-labelledby="repeat-label"><span class="switch-knob"></span></button>
               <span class="em-hint">Loops the message with a short dark gap.</span>

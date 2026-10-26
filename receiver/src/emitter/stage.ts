@@ -35,6 +35,7 @@ export class SendStage {
   private wakeLock: WakeLockSentinel | null = null;
   private cursorTimer = 0;
   private lastProgress = '';
+  private litOpacity = '1';
 
   constructor(private readonly el: HTMLElement) {
     this.tilesBox = el.querySelector<HTMLElement>('#stage-tiles')!;
@@ -58,8 +59,9 @@ export class SendStage {
     el.addEventListener('pointermove', () => this.showCursor());
   }
 
-  /** Shows the stage with `n` dark tiles, enters fullscreen and keeps the screen awake. */
-  open(n: number): void {
+  /** Shows the stage with `n` dark tiles at `brightness` (0–1) when lit, enters fullscreen and keeps the screen awake. */
+  open(n: number, brightness = 1): void {
+    this.litOpacity = String(brightness);
     this.tilesBox.replaceChildren();
     this.tiles = Array.from({ length: n }, () => {
       const t = document.createElement('div');
@@ -90,7 +92,7 @@ export class SendStage {
       const lit = levels[i] === 1;
       if (lit !== this.on[i]) {
         this.on[i] = lit;
-        this.tiles[i].style.opacity = lit ? '1' : '0';
+        this.tiles[i].style.opacity = lit ? this.litOpacity : '0';
       }
     }
   };

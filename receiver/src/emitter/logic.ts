@@ -24,6 +24,13 @@ export interface Range {
 export const BULBS: Range = { min: 1, max: MAX_BULBS, step: 1 };
 export const SLOT_MS: Range = { min: 50, max: 1000, step: 10 };
 export const DEFAULT_SLOT_MS = 100;
+/**
+ * Lit-tile brightness in percent. Phones can't lock exposure from a web page, so
+ * full-white tiles saturate the sensor and bloom into their neighbours; dimmer
+ * tiles keep a clean on/off edge.
+ */
+export const BRIGHTNESS: Range = { min: 10, max: 100, step: 10 };
+export const DEFAULT_BRIGHTNESS = 60;
 
 /** Near-square grid: 1, 2, 3 in a row, 4 = 2×2, 5–6 = 3×2, 7–9 = 3×3. */
 export function gridShape(n: number): { cols: number; rows: number } {

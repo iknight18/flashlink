@@ -10,7 +10,7 @@ import {
   planMessage,
   SLOT_MS,
   type Plan,
-} from './logic';
+BRIGHTNESS, DEFAULT_BRIGHTNESS, } from './logic';
 import { HUD_BAND_PX, layoutTiles, SendStage } from './stage';
 import { bindStepper } from './stepper';
 
@@ -23,6 +23,7 @@ interface Settings {
   coding: Coding;
   slotMs: number;
   repeat: boolean;
+  brightness: number;
 }
 
 const settings: Settings = {
@@ -31,6 +32,7 @@ const settings: Settings = {
   coding: 'pulse',
   slotMs: DEFAULT_SLOT_MS,
   repeat: true,
+  brightness: DEFAULT_BRIGHTNESS,
   ...load(),
 };
 
@@ -45,6 +47,8 @@ function load(): Partial<Settings> {
     if (s.coding === 'pulse' || s.coding === 'manchester') out.coding = s.coding;
     if (Number.isInteger(s.slotMs) && s.slotMs! >= SLOT_MS.min && s.slotMs! <= SLOT_MS.max) out.slotMs = s.slotMs;
     if (typeof s.repeat === 'boolean') out.repeat = s.repeat;
+    if (Number.isInteger(s.brightness) && s.brightness! >= BRIGHTNESS.min && s.brightness! <= BRIGHTNESS.max)
+      out.brightness = s.brightness;
     return out;
   } catch {
     return {};
@@ -103,6 +107,10 @@ const slot = bindStepper($('slot'), SLOT_MS, () => settings.slotMs, (v) => {
   settings.slotMs = v;
   update();
 });
+const brightness = bindStepper($('brightness'), BRIGHTNESS, () => settings.brightness, (v) => {
+  settings.brightness = v;
+  update();
+});
 
 for (const b of ui.coding.querySelectorAll<HTMLButtonElement>('[data-value]')) {
   b.addEventListener('click', () => {
@@ -148,7 +156,7 @@ async function play(kind: 'send' | 'calibrate', signal: MultiTimedLevels, loop: 
     ui.send.disabled = ui.calibrate.disabled = true;
     setStatus('Stopping…', '');
   };
-  stage.open(signal.lanes.length); // synchronous: still inside the click gesture
+  stage.open(signal.lanes.length, settings.brightness / 100); // synchronous: still inside the click gesture
   const label = kind === 'send' ? `msg ${msgId}` : 'calibrate';
   let pass = 0;
   let failure: unknown = null;
@@ -216,6 +224,7 @@ function update(): void {
   ui.repeat.setAttribute('aria-checked', String(settings.repeat));
   bulbs.render();
   slot.render();
+  brightness.render();
   renderPreview();
   save();
 }
