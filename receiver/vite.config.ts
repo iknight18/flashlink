@@ -22,7 +22,11 @@ function diagnosticsLog(): Plugin {
         req.on('end', () => {
           const line = JSON.stringify({ at: new Date().toISOString(), ...JSON.parse(body || '{}') });
           appendFileSync(file, line + '\n');
-          server.config.logger.info(`[rx] ${line}`);
+          // Recordings are large: the file gets everything, the terminal a summary.
+          const entry = JSON.parse(line);
+          server.config.logger.info(
+            entry.kind === 'recording' ? `[rx] recording: ${entry.frames.length} frames saved to ${file}` : `[rx] ${line}`,
+          );
           res.statusCode = 204;
           res.end();
         });
