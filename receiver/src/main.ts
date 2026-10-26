@@ -1,7 +1,7 @@
 import { type MultiEvent, MultiReceiver, type ReceiverState } from '@flashlink/protocol';
 import { channels } from './channels/registry';
 import type { Sensor, SensorSource } from './channels/types';
-import { Diagnostics, reportPageErrors, type SignalStats } from './diagnostics';
+import { Diagnostics, reportPageErrors, type SignalStats, Recorder } from './diagnostics';
 import { Feed, type FeedRow } from './feed';
 import { bestState, EdgeIntervals, liveLanes, type OverallState } from './sources';
 import { Graph } from './ui/graph';
@@ -12,6 +12,8 @@ import { Markers } from './ui/markers';
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const select = $<HTMLSelectElement>('channel');
 const startBtn = $<HTMLButtonElement>('start');
+const recordBtn = $<HTMLButtonElement>('record');
+const recorder = new Recorder();
 const viewport = $<HTMLDivElement>('viewport');
 const video = $<HTMLVideoElement>('video');
 const pill = $<HTMLSpanElement>('pill');
@@ -242,6 +244,7 @@ async function start(): Promise<void> {
   viewport.dataset.camera = 'starting';
   try {
     await sensor.start((t, sources) => {
+      recorder.push(t, sources);
       const events = rx.push(t, sources);
       for (const e of events) {
         handle(e);
@@ -266,6 +269,7 @@ async function start(): Promise<void> {
     sourceStates = new Map();
     refreshState();
     setStartButton(true);
+    recordBtn.hidden = false;
     void keepAwake(true);
   } catch (err) {
     sensor?.stop();
@@ -286,6 +290,7 @@ async function start(): Promise<void> {
 
 function stop(): void {
   fpsHint.hidden = true;
+  recordBtn.hidden = true;
   sensor?.stop();
   sensor = null;
   feed.reset();
@@ -306,6 +311,18 @@ reportPageErrors();
 pill.dataset.state = 'IDLE';
 setStartButton(false);
 startBtn.addEventListener('click', () => (sensor ? stop() : void start()));
+
+// Raw per-frame light levels for offline replay of a device test (sent to the dev-server log).
+recordBtn.addEventListener('click', () => {
+  if (recorder.active) return;
+  recordBtn.disabled = true;
+  recordBtn.textContent = 'Recording…';
+  recorder.start(10_000, () => {
+    recordBtn.disabled = false;
+    recordBtn.textContent = 'Recorded';
+    setTimeout(() => (recordBtn.textContent = 'Record 10 s'), 2500);
+  });
+});
 
 // Browsers keep the camera open in background tabs; release it so another tab or app can use it.
 document.addEventListener('visibilitychange', () => {

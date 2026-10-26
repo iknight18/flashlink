@@ -137,3 +137,39 @@ export class Diagnostics {
     this.intervals = [];
   }
 }
+
+/**
+ * Records every frame's per-light levels for a few seconds and sends them to the log
+ * in one entry, so a device test can be replayed through the decoders offline.
+ */
+export class Recorder {
+  private frames: [number, [number, number][]][] = [];
+  private until = 0;
+  private onDone: (() => void) | null = null;
+
+  get active(): boolean {
+    return this.until > 0;
+  }
+
+  start(durationMs: number, onDone: () => void): void {
+    this.frames = [];
+    this.until = -durationMs; // armed: the first frame fixes the end time
+    this.onDone = onDone;
+  }
+
+  push(t: number, sources: { id: number; level: number }[]): void {
+    if (this.until === 0) return;
+    if (this.until < 0) this.until = t - this.until;
+    this.frames.push([Math.round(t * 10) / 10, sources.map((s) => [s.id, Math.round(s.level * 1000) / 1000])]);
+    if (t >= this.until) this.finish();
+  }
+
+  private finish(): void {
+    // Not via post(): keepalive requests are capped at 64 KB and a recording can be larger.
+    if (import.meta.env.DEV)
+      fetch(ENDPOINT, { method: 'POST', body: JSON.stringify({ kind: 'recording', frames: this.frames }) }).catch(() => {});
+    this.frames = [];
+    this.until = 0;
+    this.onDone?.();
+  }
+}
