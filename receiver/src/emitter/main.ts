@@ -10,7 +10,9 @@ import {
   planMessage,
   SLOT_MS,
   type Plan,
-BRIGHTNESS, DEFAULT_BRIGHTNESS, } from './logic';
+  BRIGHTNESS,
+  DEFAULT_BRIGHTNESS,
+} from './logic';
 import { HUD_BAND_PX, layoutTiles, SendStage } from './stage';
 import { bindStepper } from './stepper';
 
