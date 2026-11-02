@@ -1,6 +1,22 @@
 # FlashLink
 
-Send text from an iPhone's flashlight to any camera, with pluggable transfer channels (light now, sound next).
+Send text from an iPhone's flashlight to any camera. No network, no pairing: the phone blinks the message
+and a web page reads it back through the camera, like a modern Aldis lamp.
+
+## How it works
+
+1. **Framing:** the text is packed (a 6-bit codec for plain text, UTF-8 otherwise), split into frames with
+   a preamble, a 16-bit sync word, a small header and a CRC-8 check. Long messages split across several
+   lanes, so several lights can carry one message in parallel.
+2. **Modulation:** each bit is Manchester-coded (or pulse-length coded) into on/off torch timings. A
+   scheduler keeps the timings steady despite the phone's timer jitter.
+3. **Reception:** the receiver samples the brightness inside a target box on every camera frame, finds the
+   edges, corrects the duty cycle, locks onto the sync word, and checks the CRC before showing the text.
+
+The protocol is plain TypeScript with no browser or React Native dependency, and ships with a simulator
+that adds camera frame rates, jitter and noise, so every change is tested against a realistic signal.
+
+## Project layout
 
 - `protocol/`: framing, Manchester coding, decoder pipeline, simulator (`npm test`)
 - `emitter/`: Expo Go app (iPhone). `npm run emitter`, then scan the QR code with Expo Go
@@ -19,6 +35,11 @@ Framing, modulation and the scheduler are shared, so nothing in `protocol/` chan
 - Keep the phone unlocked with the app in front while sending. Locking or backgrounding stops the torch.
 - Keep the torch inside the red box, 10–30 cm from the receiving camera.
 
-Measured: TODO (fill in the reliable speeds from the device checklist, Task 12 Step 1)
+## Design notes
 
-Design: `docs/plans/2026-10-23-flashlink-design.md`
+- Single light: `docs/plans/2026-10-23-flashlink-design.md`
+- Several lights (lanes): `docs/plans/2026-10-24-multi-bulb-design.md`
+
+## Licence
+
+MIT, see `LICENSE`.
